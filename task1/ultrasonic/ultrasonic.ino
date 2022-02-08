@@ -7,7 +7,7 @@ int distance;   // measured distance
 void setup(){
   pinMode(trigPin, OUTPUT); // sets the trigPin as an OUTPUT
   pinMode(echoPin, INPUT);  // sets the echoPin as an INPUT
-  Serial.begin(9600);       // sets the serial communication with 9600 baudrate
+  Serial.begin(115);       // sets the serial communication with 9600 baudrate
   Serial.println("Ultrasonic Sensor Test");
 }
 
