@@ -14,7 +14,7 @@
 
 // Arduino pin mappings
 const uint16_t FSR_PIN = A0;
-const uint16_t IR_PIN = A1;
+const uint16_t POT_PIN = A2;
 const uint16_t PING_ECHO_PIN = 2;
 const uint16_t PING_TRIG_PIN = 3;
 
@@ -38,24 +38,21 @@ void setup() {
 
 void loop() {
   Serial.println("=================[POLLING SENSORS]=================");
-  double ir_distance_cm = read_ir_sensor();
+  uint16_t pot_deg = read_potentiometer();
   uint32_t ping_distance_cm = read_ping_sensor();
-  double fsr_force_N = read_fsr();
-  Serial.println("[" + String(millis()) + "] IR DISTANCE   = " + String(ir_distance_cm, 1) + " cm");
+  uint32_t fsr_force_N = read_fsr();
+  Serial.println("[" + String(millis()) + "] POTENTIOMETER = " + String(pot_deg) + ((pot_deg == 0) ? "-" : "") + ((pot_deg == 180) ? "+" : "") + " degrees");
   Serial.println("[" + String(millis()) + "] PING DISTANCE = " + String(ping_distance_cm) + " cm");
-  Serial.println("[" + String(millis()) + "] FSR FORCE:    = " + String(fsr_force_N, 2) + " N");
+  Serial.println("[" + String(millis()) + "] FSR FORCE:    = " + String(fsr_force_N) + " N");
   Serial.println("===================================================");
   delay(200); // polling period = 200ms
 }
 
-double read_ir_sensor() {
-  uint16_t ir_in = analogRead(IR_PIN);
+uint16_t read_potentiometer() {
+  uint16_t pot_in = analogRead(POT_PIN);
+  uint16_t pot_deg = map(pot_in, 0, 1023, 0, 180);
 
-  // calculate distance based on curve in datasheet
-  double distance_cm = 29.988 * pow(ir_in, -1.173);
-
-  return distance_cm;
-  
+  return pot_deg;
 }
 
 uint32_t read_ping_sensor() {     
@@ -71,27 +68,34 @@ uint32_t read_ping_sensor() {
   time_ms = pulseIn(PING_ECHO_PIN, HIGH); 
    
   // calculates the distance (div. by 2 for time of flight)
-  distance_cm = time_ms * SPEED_SOUND / 2;    
+  distance_cm = time_ms * SPEED_SOUND / 2 / 1000;    
   return distance_cm;
 }
 
-double read_fsr() {
-    int fsrADC = analogRead(FSR_PIN);
-  // If the FSR has no pressure, the resistance will be
-  // near infinite. So the voltage should be near 0.
-  double force_N = 0;
-  if (fsrADC != 0) {
-    // Use ADC reading to calculate voltage:
-    double fsrV = fsrADC * VCC_MEAS / 1023.0;
-    // Use voltage and static resistor value to calculate FSR resistance:
-    double fsrR = R_DIV * (VCC_MEAS / fsrV - 1.0);
-    // Guesstimate force based on slopes in figure 3 of FSR datasheet
-    double fsrG = 1.0 / fsrR; // Calculate conductance
-    // Break parabolic curve down into two linear slopes:
-    if (fsrR <= 600) 
-      force_N = (fsrG - 0.00075) / 0.00000032639;
-    else
-      force_N =  fsrG / 0.000000642857; 
+uint32_t read_fsr() {
+
+  uint16_t fsr_in = analogRead(FSR_PIN);
+  uint32_t fsr_f = 0;
+ 
+  // analog voltage reading ranges from about 0 to 1023 which maps to 0V to 5V (= 5000mV)
+  uint32_t fsr_v = map(fsr_in, 0, 1023, 0, 5000); 
+ 
+  if (fsr_v != 0) {
+    // The voltage = Vcc * R / (R + FSR) where R = 10K and Vcc = 5V
+    // so FSR = ((Vcc - V) * R) / V        yay math!
+    uint32_t fsr_r = 5000 - fsr_v;     // fsrVoltage is in millivolts so 5V = 5000mV
+    fsr_r *= 10000;                // 10K resistor
+    fsr_r /= fsr_v;
+    uint32_t fsr_g = 1000000;           // we measure in micromhos so 
+    fsr_g /= fsr_r;
+ 
+    // Use the two FSR guide graphs to approximate the force
+    if (fsr_g <= 1000) {
+      fsr_f = fsr_g / 80;   
+    } else {
+      fsr_f = fsr_g - 1000;
+      fsr_f /= 30;          
+    }
   }
-  return force_N;
+  return fsr_f;
 }
