@@ -1,10 +1,9 @@
 #include <Servo.h>
 
-//servo
+//Servo
 Servo myservo;
 const uint16_t POT_PIN = A2;
 ////
-
 
 //stepper motor
 const uint16_t STEP_PIN = 8;
@@ -13,16 +12,55 @@ uint32_t curr_step_angle = 0;
 uint32_t curr_step_count = 0;
 ////
 
-//pin sensor
+//ping sensor
 const uint16_t PING_ECHO_PIN = 10;
 const uint16_t PING_TRIG_PIN = 11;
 const uint16_t SPEED_SOUND = 34;
 uint32_t ping_distance = 0;
 ////
 
+//stepper motor pins
+const uint16_t STEP_PIN = 8;
+const uint16_t STEP_DIR_PIN = 7;
+const uint16_t STEP_EN_PIN = 12;
+
+//stepper motor vars
+uint16_t step_en_state = 0;
+const uint16_t STEPS_PER_REV = 200;
+uint32_t curr_step_angle = 0;
+int curr_step_count = 0;
+uint16_t step_dir = 0; //0 for CW, 1 for CCW
+
+int target_angle = 0;
+////
+
+//push button (will toggle step_en_state)
+const uint16_t BUTTON_PIN = 13;
+uint16_t button_state = LOW;
+uint16_t last_button_state = LOW;
+
+uint32_t last_debounce_time = 0;
+uint32_t debounce_delay = 50; //in ms
+////
+
+//DC Motor pins
+const uint16_t ENC_A = 2;
+const uint16_t ENC_B = 3;
+const uint16_t PWM_PIN = 4;
+const uint16_t IN1 = 5;
+const uint16_t IN2 = 6;
+
+//DC motor vars
+const uint16_t TOTAL_COUNT = 600;
+volatile uint32_t encoder_count = 0;
+uint16_t input_angle = 0;
+uint16_t prev_angle;
+
+//buffers for communications
 int buf_len = 50;
 uint16_t deg;
 char pot_buf[50];
+////
 
 char incoming_buf[50];
 
@@ -144,17 +182,31 @@ int adjust_servo_speed(int servo_speed) {
   myservo.writeMicroseconds(map(servo_speed,-50 ,50, 1309, 1710));
 }
 
-void adjust_stepper_angle(int target_angle){
+
+void adjust_stepper_angle(uint16_t step_en_state, int target_angle){
+  if (step_en_state == 0) {
+    return;
+  }
+
+  if (curr_step_angle > target_angle){
+    step_dir = 1;
+  }else{
+    step_dir = 0;
+  }
+
+  digitalWrite(STEP_DIR_PIN, step_dir);
+  
   curr_step_angle = map(curr_step_count,0,200,0,360);
 
-  while (curr_step_angle != target_angle){
-    //Serial.println("Stepper Angle: " + String(curr_step_count) + " " + String(curr_step_angle));
-
+  while (curr_step_angle != abs(target_angle)){
+    Serial.println("Step Count: " + String(curr_step_count) + " Step Angle: " + String(curr_step_angle) 
+                   + " Target Angle: " + String(target_angle) + " Step State: " + String(step_en_state));
+    
     digitalWrite(STEP_PIN, HIGH);
-    curr_step_count++;
-    curr_step_count %= STEPS_PER_REV;
-
+    
+    curr_step_count = (step_dir) ? curr_step_count-- : curr_step_count++; 
     curr_step_angle = map(curr_step_count,0,200,0,360);
+    
     delayMicroseconds(500);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(500);

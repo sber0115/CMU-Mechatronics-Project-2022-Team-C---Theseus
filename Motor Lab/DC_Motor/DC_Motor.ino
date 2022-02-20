@@ -22,9 +22,6 @@ volatile uint32_t encoder_count = 0;
 uint16_t input_angle = 0;
 uint16_t prev_angle;
 
-float mult_factor = 0.0;
-volatile bool reached = false;
-
 /****************************************/
 
 //stepper motor pins
@@ -87,17 +84,19 @@ void setup() {
 
 void loop() {
 
-  target_angle = 180;
+  
+  target_angle = 360;
   digitalWrite(STEP_EN_PIN, step_en_state);
 
   uint16_t button_reading = digitalRead(BUTTON_PIN);
   //Serial.println("Reading: " + String(button_reading));
   enable_stepper(button_reading);
-  stepper_rotate(target_angle);
+  stepper_rotate(step_en_state, target_angle);
     
   //stepper_full_rotation();
   
   //Serial.println("Reading: " + String(button_reading) + " Saved State: " + String(step_en_state)); 
+  
 
   /*
   prev_angle = get_angle(encoder_count);
@@ -163,7 +162,9 @@ void loop() {
   Serial.print(",");
   Serial.print("V1_Filt:");
   Serial.println(v1Filt);
+
   */
+  
   delay(1);
 
 }
@@ -260,12 +261,18 @@ void enable_stepper(uint16_t reading){
   last_button_state = reading;
 }
 
-void stepper_rotate(int target_angle){
-  if (target_angle >= 0){
-    step_dir = 0;
-  }else{
-    step_dir = 1;
+void stepper_rotate(uint16_t step_en_state, int target_angle){
+  if (step_en_state == 0) {
+    return;
   }
+
+  if (curr_step_angle > target_angle){
+    step_dir = 1;
+  }else{
+    step_dir = 0;
+  }
+
+  digitalWrite(STEP_DIR_PIN, step_dir);
   
   curr_step_angle = map(curr_step_count,0,200,0,360);
 
@@ -274,10 +281,10 @@ void stepper_rotate(int target_angle){
                    + " Target Angle: " + String(target_angle) + " Step State: " + String(step_en_state));
     
     digitalWrite(STEP_PIN, HIGH);
-    curr_step_count++;
-    curr_step_count %= STEPS_PER_REV;
-
+    
+    curr_step_count = (step_dir) ? curr_step_count-- : curr_step_count++; 
     curr_step_angle = map(curr_step_count,0,200,0,360);
+    
     delayMicroseconds(500);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(500);
