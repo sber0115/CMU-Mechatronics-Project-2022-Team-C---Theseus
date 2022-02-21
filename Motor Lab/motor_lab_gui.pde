@@ -12,15 +12,20 @@ Knob dc_knob;
 Textarea servo_label;
 Textarea dc_label;
 Textarea stepper_label;
-Textarea stepper;
+Textfield stepper;
 Textarea potentiometer_label;
 Textarea potentiometer;
 Textarea ultrasonic_label;
 Textarea ultrasonic;
+Textarea manual_text;
+Textarea sensor_text;
 
 int stepper_ang;
 
 String[] list;
+String stepper_ang_txt;
+
+Boolean manual = false;
 
 void setup(){
   size(600, 600); 
@@ -75,14 +80,15 @@ void setup(){
                ;
   stepper_label.setText("Stepper Angle");
   
-  stepper = cp5.addTextarea("stepper_textarea")
-               .setPosition(475,150)
-               .setSize(50,50)
-               .setBorderColor(color(0))
-               .setColor(color(0))
+  stepper = cp5.addTextfield("stepper_input")
                .setFont(font)
+               .setPosition(450, 150)
+               .setSize(50, 50)
+               .setAutoClear(false)
                ;
   stepper.setText(Integer.toString(stepper_ang));
+  
+  cp5.addBang("submit_stepper").setPosition(505, 150).setSize(30, 30);
   
   potentiometer_label = cp5.addTextarea("potentiometer_label_textarea")
                .setPosition(60,300)
@@ -119,6 +125,31 @@ void setup(){
                .setFont(font)
                ;     
   ultrasonic.setText("0");
+  
+  cp5.addToggle("manual_toggle")
+     .setPosition(250,410)
+     .setSize(50,20)
+     .setValue(true)
+     .setMode(ControlP5.SWITCH)
+     ;
+     
+  manual_text = cp5.addTextarea("manual_textarea")
+               .setPosition(163,400)
+               .setSize(100,50)
+               .setBorderColor(color(0))
+               .setColor(color(0))
+               .setFont(font)
+               .setText("Manual")
+               ;
+               
+  sensor_text = cp5.addTextarea("sensor_textarea")
+               .setPosition(315,400)
+               .setSize(100,50)
+               .setBorderColor(color(0))
+               .setColor(color(0))
+               .setFont(font)
+               .setText("Sensor")
+               ;
 }
 
 void draw(){
@@ -138,9 +169,10 @@ void draw(){
         switch (type) {
            case "potentiometer":
              potentiometer.setText(val);
-           case "ping_sensor":
+           case "ultrasonic":
              ultrasonic.setText(val);
-             
+           //case "force":
+           //  break;
         }
       }
     }
@@ -154,10 +186,19 @@ void draw(){
 //so whe you press any button, it sends perticular char over serial port
 
 void servo_knob_fun(int val){
-  String str = String.format("servo:%d\n", -val);
-  port.write(str);
+  port.write(String.format("servo:%d\n", -val));
 }
 
 void dc_knob_fun(int val){
   port.write(String.format("dc:%d\n", val));
+}
+
+void submit_stepper(){
+  stepper_ang = Integer.valueOf(cp5.get(Textfield.class,"stepper_input").getText());
+  port.write(String.format("stepper:%d\n", stepper_ang));
+}
+
+void manual_toggle(){
+  manual = !manual;
+  port.write(String.format("manual:%b\n", manual));
 }

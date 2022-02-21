@@ -5,9 +5,17 @@ Servo myservo;
 const uint16_t SERVO_PIN = 9;
 ////
 
+<<<<<<< HEAD
 //potentiometer
 const uint16_t POT_PIN = A2;
 uint16_t pot_deg = 0;
+=======
+//stepper motor
+const uint16_t STEP_PIN = 8;
+const uint16_t STEPS_PER_REV = 200;
+uint32_t curr_step_angle = 0;
+uint32_t curr_step_count = 0;
+>>>>>>> 93eefb27a93288ef70294ead8a70ebefc8db04e1
 ////
 
 //ping sensor
@@ -18,6 +26,25 @@ const uint16_t MAX_PING_DISTANCE = 60;
 uint32_t ping_distance = 0;
 ////
 
+<<<<<<< HEAD
+//force sensor
+uint32_t force_val = 0;
+////
+
+//stepper motor
+const uint16_t STEP_PIN = 8;
+const uint16_t STEPS_PER_REV = 200;
+int curr_step_angle = 0;
+int curr_step_count = 0;
+////
+
+
+int buf_len = 50;
+uint16_t deg;
+char pot_buf[50];
+char ping_buf[50];
+char force_buf[50];
+=======
 //stepper motor pins
 const uint16_t STEP_PIN = 8;
 const uint16_t STEP_DIR_PIN = 7;
@@ -55,15 +82,13 @@ volatile uint32_t encoder_count = 0;
 uint16_t input_angle = 0;
 uint16_t prev_angle;
 
-//force sensor
-uint32_t force_val = 0;
-////
-
+//buffers for communications
 int buf_len = 50;
 uint16_t deg;
 char pot_buf[50];
-char ping_buf[50];
-char force_buf[50];
+////
+
+>>>>>>> 93eefb27a93288ef70294ead8a70ebefc8db04e1
 char incoming_buf[50];
 
 size_t read_len;
@@ -138,11 +163,11 @@ void loop() {
   if(manual){
     adjust_servo_speed(servo_speed_manual);
 //    adjust_dc_speed(dc_speed_manual);
-    seb_adjust_stepper_angle(stepper_angle_manual, stepper_angle_manual);
+    //adjust_stepper_angle(stepper_angle_manual);
   }else{
     adjust_servo_speed(servo_speed_sensor);
 //    adjust_dc_speed(dc_speed_manual);
-    //adjust_stepper_angle(stepper_angle_manual);
+    adjust_stepper_angle(stepper_angle_manual);
   }
   
   write_len = sprintf(pot_buf, "potentiometer:%d\n", pot_deg);
@@ -182,7 +207,30 @@ void adjust_servo_speed(int servo_speed) {
   myservo.writeMicroseconds(map(servo_speed,-50 ,50, 1309, 1710));
 }
 
-void seb_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
+<<<<<<< HEAD
+void adjust_stepper_angle(int target_angle){
+  curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
+
+  while (abs(curr_step_angle - target_angle) > 5){
+    if ((curr_step_angle > target_angle && abs(curr_step_angle - target_angle) < 180) ||
+        (curr_step_angle < target_angle && abs(curr_step_angle - target_angle) >= 180)){
+      digitalWrite(STEP_PIN, LOW);
+      delayMicroseconds(500);
+      digitalWrite(STEP_PIN, HIGH);
+      delayMicroseconds(500);
+      curr_step_count--;
+    }else{
+      digitalWrite(STEP_PIN, HIGH);
+      delayMicroseconds(500);
+      digitalWrite(STEP_PIN, LOW);
+      delayMicroseconds(500);
+      curr_step_count++;
+    }
+    curr_step_count %= STEPS_PER_REV;
+    curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
+=======
+
+void adjust_stepper_angle(uint16_t step_en_state, int target_angle){
   if (step_en_state == 0) {
     return;
   }
@@ -209,30 +257,7 @@ void seb_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
     delayMicroseconds(500);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(500);
-  }
-}
-
-void val_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
-
-  curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
-
-  while (abs(curr_step_angle - target_angle) > 5){
-    if ((curr_step_angle > target_angle && abs(curr_step_angle - target_angle) < 180) ||
-        (curr_step_angle < target_angle && abs(curr_step_angle - target_angle) >= 180)){
-      digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(500);
-      digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(500);
-      curr_step_count--;
-    }else{
-      digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(500);
-      digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(500);
-      curr_step_count++;
-    }
-    curr_step_count %= STEPS_PER_REV;
-    curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
+>>>>>>> 93eefb27a93288ef70294ead8a70ebefc8db04e1
   }
   return;
 }
