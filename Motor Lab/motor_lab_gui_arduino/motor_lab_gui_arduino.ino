@@ -20,6 +20,11 @@ const uint16_t MAX_PING_DISTANCE = 60;
 uint32_t ping_distance = 0;
 ////
 
+//fsr
+const uint16_t FSR_PIN = A3;
+uint32_t fsr_reading;
+////
+
 //stepper motor pins
 const uint16_t STEP_PIN = 8;
 const uint16_t STEP_DIR_PIN = 7;
@@ -173,25 +178,40 @@ void loop() {
 
   pot_deg = read_potentiometer();
   ping_distance = read_ping_sensor();
+  fsr_reading = read_fsr();
+
+  Serial.println("FSR Reading: " + String(fsr_reading));
+  
   servo_speed_sensor = map(pot_deg, 0, 180, -50, 50);
   stepper_angle_sensor = map(ping_distance, 0, MAX_PING_DISTANCE, 0, 360);
   
   if(manual){
-    adjust_servo_speed(servo_speed_manual);
+    if (fsr_reading >= 2) {
+      adjust_servo_speed(0);
+
+    } else{
+      adjust_servo_speed(servo_speed_manual);
+    }
     //adjust_dc_pos(dc_pos_manual);
     adjust_stepper_angle(stepper_angle_manual);
   }else{
-    adjust_servo_speed(servo_speed_sensor);
+    if (fsr_reading >= 2){
+      adjust_servo_speed(0);
+    } else{
+      adjust_servo_speed(servo_speed_sensor);
+    }
     //adjust_dc_pos(dc_speed_manual);
     adjust_stepper_angle(stepper_angle_sensor);
   }
 
- 
+
+  /* 
   write_len = sprintf(pot_buf, "potentiometer:%d\n", pot_deg);
   Serial.write(pot_buf, write_len);
   
   write_len = sprintf(ping_buf,"ultrasonic:%d\n", ping_distance);
   Serial.write(ping_buf, write_len);
+  */
  
   
   delay(200);
@@ -219,6 +239,33 @@ uint32_t read_ping_sensor() {
   // calculates the distance (div. by 2 for time of flight)
   distance_cm = time_ms * SPEED_SOUND / 2 / 1000;    
   return distance_cm;
+}
+
+uint32_t read_fsr() {
+  uint16_t fsr_in = analogRead(FSR_PIN);
+  uint32_t fsr_f = 0;
+ 
+  // analog voltage reading ranges from about 0 to 1023 which maps to 0V to 5V (= 5000mV)
+  uint32_t fsr_v = map(fsr_in, 0, 1023, 0, 5000); 
+ 
+  if (fsr_v != 0) {
+    // The voltage = Vcc * R / (R + FSR) where R = 10K and Vcc = 5V
+    // so FSR = ((Vcc - V) * R) / V        yay math!
+    uint32_t fsr_r = 5000 - fsr_v;     // fsrVoltage is in millivolts so 5V = 5000mV
+    fsr_r *= 10000;                // 10K resistor
+    fsr_r /= fsr_v;
+    uint32_t fsr_g = 1000000;           // we measure in micromhos so 
+    fsr_g /= fsr_r;
+ 
+    // Use the two FSR guide graphs to approximate the force
+    if (fsr_g <= 1000) {
+      fsr_f = fsr_g / 80;   
+    } else {
+      fsr_f = fsr_g - 1000;
+      fsr_f /= 30;          
+    }
+  }
+  return fsr_f;
 }
 
 
