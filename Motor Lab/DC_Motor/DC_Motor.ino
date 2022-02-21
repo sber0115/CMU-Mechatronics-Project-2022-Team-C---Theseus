@@ -1,88 +1,47 @@
-#include <util/atomic.h>
+#include <PIDController.h>
+#include <Encoder.h>
 
-//push button (will toggle step_en_state)
-const uint16_t BUTTON_PIN = 13;
-uint16_t button_state = LOW;
-uint16_t last_button_state = LOW;
 
-uint32_t last_debounce_time = 0;
-uint32_t debounce_delay = 50; //in ms
-////
-
-//DC Motor pins
+// Pin definitions
 const uint16_t ENC_A = 2;
 const uint16_t ENC_B = 3;
-const uint16_t PWM_PIN = 4;
+const uint16_t ENA = 4;
 const uint16_t IN1 = 5;
 const uint16_t IN2 = 6;
 
-//DC motor vars
-const uint16_t TOTAL_COUNT = 600;
-volatile uint32_t encoder_count = 0;
-uint16_t input_angle = 0;
-uint16_t prev_angle;
+enum dir_t { CW, CCW, STOP };
 
-/****************************************/
+PIDController pid;
+Encoder motor(2,3);
 
-//stepper motor pins
-const uint16_t STEP_PIN = 8;
-const uint16_t STEP_DIR_PIN = 7;
-const uint16_t STEP_EN_PIN = 12;
 
-//stepper motor vars
-uint16_t step_en_state = 0;
-const uint16_t STEPS_PER_REV = 200;
-uint32_t curr_step_angle = 0;
-int curr_step_count = 0;
-uint16_t step_dir = 0; //0 for CW, 1 for CCW
+// DC motor vars
+const uint16_t TICKS_PER_ROTATION = 2400;
 
-int target_angle = 0;
+const double K_P = 0.5;
+const double K_I = 2.5;
+const double K_D = 60;
 
-/****************************************/
-
-// PID globals
-long prevT = 0;
-int posPrev = 0;
-float prev_error = 0.0;
-float error = 0.0;
-// Use the "volatile" directive for variables
-// used in an interrupt
-volatile int pos_i = 0;
-volatile float velocity_i = 0;
-volatile long prevT_i = 0;
-
-float v1Filt = 0;
-float v1Prev = 0;
-float v2Filt = 0;
-float v2Prev = 0;
-
-float eintegral = 0.0;
-float ederiv = 0.0;
-/****************************************/
+int32_t motor_pos = 0;
 
 void setup() {
-  Serial.begin(115200); // Serial for Debugging
-
-  //DC Motor setup
+  Serial.begin(115200);
+  
   pinMode(ENC_A, INPUT); // ENCODER_A as Input
   pinMode(ENC_B, INPUT); // ENCODER_B as Input
   pinMode(IN1, OUTPUT);
-  pinMode(IN2, OUTPUT); 
-  pinMode(PWM_PIN, OUTPUT); // sets motor velocity
-  attachInterrupt(digitalPinToInterrupt(ENC_A),read_encoder, RISING);  
+  pinMode(IN2, OUTPUT); // sets motor velocity
+  pinMode(ENA, OUTPUT);
 
-
-  //Stepper motor setup
-  pinMode(STEP_DIR_PIN, OUTPUT);
-  pinMode(STEP_EN_PIN, OUTPUT);
-  pinMode(STEP_PIN, OUTPUT);
-
-  //Push button setup
-  pinMode(BUTTON_PIN, INPUT);
+  pid.begin();     
+  pid.setpoint(0);  
+  pid.tune(K_P, K_I, K_D);  
+  pid.limit(0, 255);
 
 }
 
 void loop() {
+<<<<<<< HEAD
 
   digitalWrite(STEP_EN_PIN, step_en_state);
   digitalWrite(STEP_EN_PIN, LOW);
@@ -230,65 +189,34 @@ void stepper_full_rotation(){
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(1000);
   }
+
+/*
+  motor_pos = motor.read();
+  int32_t next_pos = pid.compute(motor_pos);
+  motor_drive(100, ((motor_pos - next_pos) > 0) ? CCW : CW);
+  Serial.println("[" + String(millis() % 10000) + "]" + " Encoder Loc: " + String(motor_pos) + "->" + String(next_pos));
+  pid.setpoint(128);
+  delay(10); 
 }
 
-void enable_stepper(uint16_t reading){
-  // If the switch changed, due to noise or pressing:
-  if (reading != last_button_state) {
-    // reset the debouncing timer
-    last_debounce_time = millis();
+*/
+
+void motor_drive(uint16_t speed, dir_t direction) {
+  analogWrite(IN2, speed);
+  switch(direction) {
+    case CW: 
+      digitalWrite(ENA,HIGH);
+      digitalWrite(IN1,HIGH);
+      break;
+    case CCW:
+      digitalWrite(ENA,HIGH);
+      digitalWrite(IN1,LOW);
+      break;
+    default:
+      digitalWrite(IN1,LOW);
+      digitalWrite(IN2,LOW);   
+      break;  
   }
-
-  if ((millis() - last_debounce_time) > debounce_delay) {
-    // whatever the reading is at, it's been there for longer than the debounce
-    // delay, so take it as the actual current state:
-
-    // if the button state has changed:
-    if (reading != button_state) {
-      button_state = reading;
-
-      // only enable the tepper if the new button state is HIGH
-      if (button_state == HIGH) {
-        step_en_state = !step_en_state;
-      }
-    }
-  }
-
-  // set the stepper driver enable state
-  digitalWrite(STEP_EN_PIN, step_en_state);
-  // save the reading. Next time through the loop, it'll be the lastButtonState:
-  last_button_state = reading;
-}
-
-void stepper_rotate(uint16_t step_en_state, int target_angle){
-  if (step_en_state == 0) {
-    return;
-  }
-
-  if (curr_step_angle > target_angle){
-    step_dir = 1;
-  }else{
-    step_dir = 0;
-  }
-
-  digitalWrite(STEP_DIR_PIN, step_dir);
-  
-  curr_step_angle = map(curr_step_count,0,200,0,360);
-
-  while (curr_step_angle != abs(target_angle)){
-    Serial.println("Step Count: " + String(curr_step_count) + " Step Angle: " + String(curr_step_angle) 
-                   + " Target Angle: " + String(target_angle) + " Step State: " + String(step_en_state));
-    
-    digitalWrite(STEP_PIN, HIGH);
-    
-    curr_step_count = (step_dir) ? curr_step_count-- : curr_step_count++; 
-    curr_step_angle = map(curr_step_count,0,200,0,360);
-    
-    delayMicroseconds(500);
-    digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(500);
-  }
-  return;
 }
 
 void val_adjust_stepper_angle(int target_angle){
