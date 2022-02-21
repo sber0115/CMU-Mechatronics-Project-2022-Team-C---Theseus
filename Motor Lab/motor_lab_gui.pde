@@ -148,7 +148,7 @@ void setup(){
   
   ultrasonic = cp5.addTextarea("ultrasonic_textarea")
                .setPosition(425,330)
-               .setSize(50,50)
+               .setSize(100,50)
                .setBorderColor(color(0))
                .setColor(color(0))
                .setFont(font)
@@ -257,7 +257,7 @@ void servo_knob_fun(int val){
 }
 
 void dc_knob_fun(int val){
-  port.write(String.format("dc:%d\n", val));
+  port.write(String.format("dc_speed:%d\n", val));
 }
 
 void submit_stepper(){
@@ -267,8 +267,9 @@ void submit_stepper(){
 
 
 void submit_dc_pos(){
-  stepper_ang = Integer.valueOf(cp5.get(Textfield.class,"dc_pos_input").getText());
-  port.write(String.format("stepper:%d\n", stepper_ang));
+  dc_ang = Integer.valueOf(cp5.get(Textfield.class,"dc_pos_input").getText());
+  port.write(String.format("dc_pos:%d\n", dc_ang));
+  println(String.format("dc_pos:%d\n", dc_ang));
 }
 
 void submit_PID(){

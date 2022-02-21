@@ -192,8 +192,27 @@ void loop() {
     } else{
       adjust_servo_speed(servo_speed_manual);
     }
-    //adjust_dc_pos(dc_pos_manual);
+//    adjust_dc_pos(180);
     adjust_stepper_angle(stepper_angle_manual);
+
+
+
+    // motor power
+    int pwr = abs(dc_speed_manual);
+
+    if(pwr > 255){
+      pwr = 255;
+    }
+  
+    // motor direction
+    int dir = 1;
+    if(dc_speed_manual < 0){
+      dir = -1;
+    }
+  
+    // signal the motor
+    set_motor(dir,IN2,pwr,IN1,IN2);
+
   }else{
     if (fsr_reading >= 2){
       adjust_servo_speed(0);
@@ -307,7 +326,7 @@ void adjust_stepper_angle(int target_angle){
     step_dir = 0;
   }
 
-  digitalWrite(STEP_DIR_PIN, LOW);
+  digitalWrite(STEP_DIR_PIN, step_dir);
   
   curr_step_angle = map(curr_step_count,0,200,0,360);
 
@@ -328,24 +347,21 @@ void adjust_stepper_angle(int target_angle){
 }
 
 void val_adjust_stepper_angle(int target_angle){
-
   curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
 
-  while (abs(curr_step_angle - target_angle) > 5){
+  while (abs(curr_step_angle - target_angle) > 2){
     if ((curr_step_angle > target_angle && abs(curr_step_angle - target_angle) < 180) ||
         (curr_step_angle < target_angle && abs(curr_step_angle - target_angle) >= 180)){
-      digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(500);
-      digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(500);
       curr_step_count--;
+      digitalWrite(STEP_DIR_PIN, HIGH);
     }else{
-      digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(500);
-      digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(500);
       curr_step_count++;
+      digitalWrite(STEP_DIR_PIN, LOW);
     }
+    digitalWrite(STEP_PIN, HIGH);
+    delayMicroseconds(1000);
+    digitalWrite(STEP_PIN, LOW);
+    delayMicroseconds(1000);
     curr_step_count %= STEPS_PER_REV;
     curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
   }
@@ -425,20 +441,20 @@ void read_encoder(){
 }
 
 void set_motor(int dir, int pwmPin, int pwmVal, int in1, int in2) {
-  analogWrite(pwmPin,pwmVal); // Motor speed
+  analogWrite(IN2,pwmVal); // Motor speed
   if (dir == 1){ 
     // Turn one way
-    digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+    digitalWrite(4,HIGH);
+    digitalWrite(IN1,HIGH);
   }
   else if (dir == -1){
     // Turn the other way
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
+    digitalWrite(IN1,LOW);
+    digitalWrite(4,HIGH);
   }
   else{
     // Or dont turn
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);    
+    digitalWrite(IN1,LOW);
+    digitalWrite(IN2,LOW);    
   }
 }
