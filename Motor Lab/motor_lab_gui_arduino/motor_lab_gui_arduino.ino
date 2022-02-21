@@ -81,17 +81,47 @@ int stepper_angle_sensor = 0;
 
 
 void setup() {
-  // put your setup code here, to run once:
+  Serial.begin(115200);
+  
+  //Servo setup
   myservo.attach(SERVO_PIN);
+
+  //Ping sensor setup
   pinMode(PING_ECHO_PIN, INPUT);
   pinMode(PING_TRIG_PIN, OUTPUT);
-  
-  Serial.begin(115200);
+
+  //DC Motor setup
+  pinMode(ENC_A, INPUT); // ENCODER_A as Input
+  pinMode(ENC_B, INPUT); // ENCODER_B as Input
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT); 
+  pinMode(PWM_PIN, OUTPUT); // sets motor velocity
+  //attachInterrupt(digitalPinToInterrupt(ENC_A),read_encoder, RISING);  
+
+
+  //Stepper motor setup
+  pinMode(STEP_DIR_PIN, OUTPUT);
+  pinMode(STEP_EN_PIN, OUTPUT);
+  pinMode(STEP_PIN, OUTPUT);
+
+  //Push button setup
+  pinMode(BUTTON_PIN, INPUT);
 }
-// Continuous servo stops when writing 1510 microseconds to it.
+
+
 void loop() {
 
   //Serial.println("Ping distance: " + String(ping_distance));
+
+  //digitalWrite(STEP_EN_PIN, step_en_state);
+
+  uint16_t button_reading = digitalRead(BUTTON_PIN);
+  
+  //Serial.println("Reading: " + String(button_reading));
+  //Serial.println("Reading: " + String(button_reading) + " Saved State: " + String(step_en_state));  
+
+  digitalWrite(STEP_EN_PIN, HIGH);
+  //enable_stepper(button_reading);
 
   while(Serial.available() > 0) {
     read_len = Serial.readBytesUntil('\n', incoming_buf, buf_len);
@@ -134,22 +164,27 @@ void loop() {
   ping_distance = read_ping_sensor();
   servo_speed_sensor = map(pot_deg, 0, 180, -50, 50);
   stepper_angle_sensor = map(ping_distance, 0, MAX_PING_DISTANCE, 0, 360);
-  
+
+  stepper_angle_manual = 90;
+  seb_adjust_stepper_angle(step_en_state, stepper_angle_manual);
+
   if(manual){
     adjust_servo_speed(servo_speed_manual);
 //    adjust_dc_speed(dc_speed_manual);
-    seb_adjust_stepper_angle(stepper_angle_manual, stepper_angle_manual);
+    seb_adjust_stepper_angle(step_en_state, stepper_angle_manual);
   }else{
     adjust_servo_speed(servo_speed_sensor);
 //    adjust_dc_speed(dc_speed_manual);
     //adjust_stepper_angle(stepper_angle_manual);
   }
-  
+
+  /*
   write_len = sprintf(pot_buf, "potentiometer:%d\n", pot_deg);
   Serial.write(pot_buf, write_len);
   
   write_len = sprintf(ping_buf,"ultrasonic:%d\n", ping_distance);
   Serial.write(ping_buf, write_len);
+  */
   delay(200);
   
 }
@@ -182,10 +217,40 @@ void adjust_servo_speed(int servo_speed) {
   myservo.writeMicroseconds(map(servo_speed,-50 ,50, 1309, 1710));
 }
 
+void enable_stepper(uint16_t reading){
+  // If the switch changed, due to noise or pressing:
+  if (reading != last_button_state) {
+    // reset the debouncing timer
+    last_debounce_time = millis();
+  }
+
+  if ((millis() - last_debounce_time) > debounce_delay) {
+    // whatever the reading is at, it's been there for longer than the debounce
+    // delay, so take it as the actual current state:
+
+    // if the button state has changed:
+    if (reading != button_state) {
+      button_state = reading;
+
+      // only enable the tepper if the new button state is HIGH
+      if (button_state == HIGH) {
+        step_en_state = !step_en_state;
+      }
+    }
+  }
+
+  // set the stepper driver enable state
+  digitalWrite(STEP_EN_PIN, step_en_state);
+  // save the reading. Next time through the loop, it'll be the lastButtonState:
+  last_button_state = reading;
+}
+
 void seb_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
+  /*
   if (step_en_state == 0) {
     return;
   }
+  */
 
   if (curr_step_angle > target_angle){
     step_dir = 1;
@@ -212,7 +277,7 @@ void seb_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
   }
 }
 
-void val_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
+void val_adjust_stepper_angle(int target_angle){
 
   curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
 

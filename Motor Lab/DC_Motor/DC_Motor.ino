@@ -84,17 +84,16 @@ void setup() {
 
 void loop() {
 
-  
-  target_angle = 360;
   digitalWrite(STEP_EN_PIN, step_en_state);
+  digitalWrite(STEP_EN_PIN, LOW);
 
   uint16_t button_reading = digitalRead(BUTTON_PIN);
   //Serial.println("Reading: " + String(button_reading));
-  enable_stepper(button_reading);
-  stepper_rotate(step_en_state, target_angle);
-    
-  //stepper_full_rotation();
-  
+  //enable_stepper(button_reading);
+  //stepper_rotate(step_en_state, target_angle);
+
+  val_adjust_stepper_angle(90);
+      
   //Serial.println("Reading: " + String(button_reading) + " Saved State: " + String(step_en_state)); 
   
 
@@ -288,6 +287,31 @@ void stepper_rotate(uint16_t step_en_state, int target_angle){
     delayMicroseconds(500);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(500);
+  }
+  return;
+}
+
+void val_adjust_stepper_angle(int target_angle){
+
+  curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
+
+  while (abs(curr_step_angle - target_angle) > 5){
+    if ((curr_step_angle > target_angle && abs(curr_step_angle - target_angle) < 180) ||
+        (curr_step_angle < target_angle && abs(curr_step_angle - target_angle) >= 180)){
+      digitalWrite(STEP_PIN, LOW);
+      delayMicroseconds(500);
+      digitalWrite(STEP_PIN, HIGH);
+      delayMicroseconds(500);
+      curr_step_count--;
+    }else{
+      digitalWrite(STEP_PIN, HIGH);
+      delayMicroseconds(500);
+      digitalWrite(STEP_PIN, LOW);
+      delayMicroseconds(500);
+      curr_step_count++;
+    }
+    curr_step_count %= STEPS_PER_REV;
+    curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
   }
   return;
 }
