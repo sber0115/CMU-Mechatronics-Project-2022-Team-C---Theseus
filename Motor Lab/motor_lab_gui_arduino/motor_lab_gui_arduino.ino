@@ -1,4 +1,6 @@
 #include <Servo.h>
+#include <util/atomic.h>
+
 
 //Servo
 Servo myservo;
@@ -30,7 +32,8 @@ uint32_t curr_step_angle = 0;
 int curr_step_count = 0;
 uint16_t step_dir = 0; //0 for CW, 1 for CCW
 
-int target_angle = 0;
+int target_pos = map(90, 0, 360, 0, 800);
+
 ////
 
 //push button (will toggle step_en_state)
@@ -55,6 +58,13 @@ volatile uint32_t encoder_count = 0;
 uint16_t input_angle = 0;
 uint16_t prev_angle;
 
+//PID for position
+volatile int posi = 0; 
+long prevT = 0;
+float eprev = 0;
+float eintegral = 0;
+////
+
 //force sensor
 uint32_t force_val = 0;
 ////
@@ -69,10 +79,11 @@ char incoming_buf[50];
 size_t read_len;
 size_t write_len;
 char *token;
-bool manual = true;
+bool manual = false;
 
 int servo_speed_manual = 0;
 int dc_speed_manual = 0;
+int dc_pos_manual = 0;
 int stepper_angle_manual = 0;
 
 int servo_speed_sensor = 0;
@@ -96,8 +107,7 @@ void setup() {
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT); 
   pinMode(PWM_PIN, OUTPUT); // sets motor velocity
-  //attachInterrupt(digitalPinToInterrupt(ENC_A),read_encoder, RISING);  
-
+  attachInterrupt(digitalPinToInterrupt(ENC_A),read_encoder, RISING);  
 
   //Stepper motor setup
   pinMode(STEP_DIR_PIN, OUTPUT);
@@ -110,18 +120,14 @@ void setup() {
 
 
 void loop() {
-
-  //Serial.println("Ping distance: " + String(ping_distance));
-
-  //digitalWrite(STEP_EN_PIN, step_en_state);
-
+  
   uint16_t button_reading = digitalRead(BUTTON_PIN);
   
   //Serial.println("Reading: " + String(button_reading));
   //Serial.println("Reading: " + String(button_reading) + " Saved State: " + String(step_en_state));  
 
-  digitalWrite(STEP_EN_PIN, HIGH);
-  //enable_stepper(button_reading);
+  //digitalWrite(STEP_EN_PIN, LOW);
+  enable_stepper(button_reading);
 
   while(Serial.available() > 0) {
     read_len = Serial.readBytesUntil('\n', incoming_buf, buf_len);
@@ -145,10 +151,15 @@ void loop() {
         if(token != NULL){
           servo_speed_manual = strtol(token, NULL, 10);
         }
-      }else if(strcmp(token, "dc") == 0){
+      }else if(strcmp(token, "dc_speed") == 0){
         token = strtok(NULL, ":");
         if(token != NULL){
           dc_speed_manual = strtol(token, NULL, 10);
+        }
+       }else if(strcmp(token, "dc_pos") == 0){
+        token = strtok(NULL, ":");
+        if(token != NULL){
+          dc_pos_manual = strtol(token, NULL, 10);
         }
       }else if(strcmp(token, "stepper") == 0){
         token = strtok(NULL, ":");
@@ -164,27 +175,25 @@ void loop() {
   ping_distance = read_ping_sensor();
   servo_speed_sensor = map(pot_deg, 0, 180, -50, 50);
   stepper_angle_sensor = map(ping_distance, 0, MAX_PING_DISTANCE, 0, 360);
-
-  stepper_angle_manual = 90;
-  seb_adjust_stepper_angle(step_en_state, stepper_angle_manual);
-
+  
   if(manual){
     adjust_servo_speed(servo_speed_manual);
-//    adjust_dc_speed(dc_speed_manual);
-    seb_adjust_stepper_angle(step_en_state, stepper_angle_manual);
+    //adjust_dc_pos(dc_pos_manual);
+    adjust_stepper_angle(stepper_angle_manual);
   }else{
     adjust_servo_speed(servo_speed_sensor);
-//    adjust_dc_speed(dc_speed_manual);
-    //adjust_stepper_angle(stepper_angle_manual);
+    //adjust_dc_pos(dc_speed_manual);
+    adjust_stepper_angle(stepper_angle_sensor);
   }
 
-  /*
+ 
   write_len = sprintf(pot_buf, "potentiometer:%d\n", pot_deg);
   Serial.write(pot_buf, write_len);
   
   write_len = sprintf(ping_buf,"ultrasonic:%d\n", ping_distance);
   Serial.write(ping_buf, write_len);
-  */
+ 
+  
   delay(200);
   
 }
@@ -245,36 +254,31 @@ void enable_stepper(uint16_t reading){
   last_button_state = reading;
 }
 
-void seb_adjust_stepper_angle(uint16_t step_en_state, int target_angle){
-  /*
-  if (step_en_state == 0) {
-    return;
-  }
-  */
-
+void adjust_stepper_angle(int target_angle){
   if (curr_step_angle > target_angle){
     step_dir = 1;
   }else{
     step_dir = 0;
   }
 
-  digitalWrite(STEP_DIR_PIN, step_dir);
+  digitalWrite(STEP_DIR_PIN, LOW);
   
   curr_step_angle = map(curr_step_count,0,200,0,360);
 
-  while (curr_step_angle != abs(target_angle)){
-    Serial.println("Step Count: " + String(curr_step_count) + " Step Angle: " + String(curr_step_angle) 
-                   + " Target Angle: " + String(target_angle) + " Step State: " + String(step_en_state));
-    
-    digitalWrite(STEP_PIN, HIGH);
-    
-    curr_step_count = (step_dir) ? curr_step_count-- : curr_step_count++; 
+  while (abs(curr_step_angle - target_angle) > 2){
+    if (step_dir) {
+      curr_step_count--;
+    }else{
+      curr_step_count++;
+    }
     curr_step_angle = map(curr_step_count,0,200,0,360);
     
-    delayMicroseconds(500);
+    digitalWrite(STEP_PIN, HIGH);
+    delayMicroseconds(1000);
     digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(500);
+    delayMicroseconds(1000);
   }
+  return;
 }
 
 void val_adjust_stepper_angle(int target_angle){
@@ -300,4 +304,95 @@ void val_adjust_stepper_angle(int target_angle){
     curr_step_angle = map(curr_step_count,0,STEPS_PER_REV,0,360);
   }
   return;
+}
+
+
+void adjust_dc_pos(uint16_t target){
+  // set target position
+  //int target = 1200;
+  //int target = 250*sin(prevT/1e6);
+  target_pos = map(target, 0, 360, 0, 800);
+
+  // PID constants
+  float kp = 1;
+  float kd = 0.025;
+  float ki = 0.0;
+
+  // time difference
+  long currT = micros();
+  float deltaT = ((float) (currT - prevT))/( 1.0e6 );
+  prevT = currT;
+
+  // Read the position in an atomic block to avoid a potential
+  // misread if the interrupt coincides with this code running
+  // see: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
+  int pos = 0; 
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    pos = posi;
+  }
+  
+  // error
+  int e = pos - target_pos;
+
+  // derivative
+  float dedt = (e-eprev)/(deltaT);
+
+  // integral
+  eintegral = eintegral + e*deltaT;
+
+  // control signal
+  float u = kp*e + kd*dedt + ki*eintegral;
+
+  // motor power
+  float pwr = fabs(u);
+  if( pwr > 255 ){
+    pwr = 255;
+  }
+
+  // motor direction
+  int dir = 1;
+  if(u<0){
+    dir = -1;
+  }
+
+  // signal the motor
+  set_motor(dir,pwr,PWM_PIN,IN1,IN2);
+
+  // store previous error
+  eprev = e;
+
+  Serial.print(target_pos);
+  Serial.print(" ");
+  Serial.print(pos);
+  Serial.println();
+  
+}
+
+void read_encoder(){
+  int b = digitalRead(ENC_B);
+  if(b > 0){
+    posi++;
+  }
+  else{
+    posi--;
+  }
+}
+
+void set_motor(int dir, int pwmPin, int pwmVal, int in1, int in2) {
+  analogWrite(pwmPin,pwmVal); // Motor speed
+  if (dir == 1){ 
+    // Turn one way
+    digitalWrite(in1,HIGH);
+    digitalWrite(in2,LOW);
+  }
+  else if (dir == -1){
+    // Turn the other way
+    digitalWrite(in1,LOW);
+    digitalWrite(in2,HIGH);
+  }
+  else{
+    // Or dont turn
+    digitalWrite(in1,LOW);
+    digitalWrite(in2,LOW);    
+  }
 }

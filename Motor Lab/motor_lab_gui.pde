@@ -11,8 +11,10 @@ Knob servo_knob;
 Knob dc_knob;
 Textarea servo_label;
 Textarea dc_label;
+Textarea dc_pos_label;
 Textarea stepper_label;
 Textfield stepper;
+Textfield dc_pos;
 Textarea potentiometer_label;
 Textarea potentiometer;
 Textarea ultrasonic_label;
@@ -20,7 +22,10 @@ Textarea ultrasonic;
 Textarea manual_text;
 Textarea sensor_text;
 
+Toggle man_toggle;
+
 int stepper_ang;
+int dc_ang;
 
 String[] list;
 String stepper_ang_txt;
@@ -72,7 +77,7 @@ void setup(){
   dc_label.setText("DC Motor RPM");
   
   stepper_label = cp5.addTextarea("stepper_label_textarea")
-               .setPosition(425,120)
+               .setPosition(425,140)
                .setSize(175,50)
                .setBorderColor(color(0))
                .setColor(color(0))
@@ -82,13 +87,32 @@ void setup(){
   
   stepper = cp5.addTextfield("stepper_input")
                .setFont(font)
-               .setPosition(450, 150)
+               .setPosition(450, 170)
                .setSize(50, 50)
                .setAutoClear(false)
                ;
   stepper.setText(Integer.toString(stepper_ang));
   
-  cp5.addBang("submit_stepper").setPosition(505, 150).setSize(30, 30);
+  cp5.addBang("submit_stepper").setPosition(505, 180).setSize(30, 30);
+  
+  dc_pos_label = cp5.addTextarea("dc_pos_textarea")
+               .setPosition(425,20)
+               .setSize(175,50)
+               .setBorderColor(color(0))
+               .setColor(color(0))
+               .setFont(font)
+               ;
+  dc_pos_label.setText("DC Motor Angle");
+  
+  dc_pos = cp5.addTextfield("dc_pos_input")
+               .setFont(font)
+               .setPosition(450, 50)
+               .setSize(50, 50)
+               .setAutoClear(false)
+               ;
+  dc_pos.setText(Integer.toString(dc_ang));
+  
+  cp5.addBang("submit_dc_pos").setPosition(505, 60).setSize(30, 30);
   
   potentiometer_label = cp5.addTextarea("potentiometer_label_textarea")
                .setPosition(60,300)
@@ -126,7 +150,7 @@ void setup(){
                ;     
   ultrasonic.setText("0");
   
-  cp5.addToggle("manual_toggle")
+  man_toggle = cp5.addToggle("manual_toggle")
      .setPosition(250,410)
      .setSize(50,20)
      .setValue(true)
@@ -173,6 +197,9 @@ void draw(){
              ultrasonic.setText(val);
            //case "force":
            //  break;
+           case "button":
+             manual_toggle();
+             man_toggle.setValue(!manual);
         }
       }
     }
