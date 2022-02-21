@@ -16,7 +16,7 @@ uint16_t pot_deg = 0;
 const uint16_t PING_ECHO_PIN = 10;
 const uint16_t PING_TRIG_PIN = 11;
 const uint16_t SPEED_SOUND = 34;
-const uint16_t MAX_PING_DISTANCE = 60;
+const uint16_t MAX_PING_DISTANCE = 184;
 uint32_t ping_distance = 0;
 ////
 
@@ -84,7 +84,7 @@ char incoming_buf[50];
 size_t read_len;
 size_t write_len;
 char *token;
-bool manual = false;
+bool manual = true;
 
 int servo_speed_manual = 0;
 int dc_speed_manual = 0;
@@ -205,13 +205,12 @@ void loop() {
   }
 
 
-  /* 
+  
   write_len = sprintf(pot_buf, "potentiometer:%d\n", pot_deg);
   Serial.write(pot_buf, write_len);
   
   write_len = sprintf(ping_buf,"ultrasonic:%d\n", ping_distance);
   Serial.write(ping_buf, write_len);
-  */
  
   
   delay(200);

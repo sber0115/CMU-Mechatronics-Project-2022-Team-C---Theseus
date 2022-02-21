@@ -21,6 +21,11 @@ Textarea ultrasonic_label;
 Textarea ultrasonic;
 Textarea manual_text;
 Textarea sensor_text;
+Textarea PID_label;
+Textfield P_term;
+Textfield I_term;
+Textfield D_term;
+
 
 Toggle man_toggle;
 
@@ -174,6 +179,41 @@ void setup(){
                .setFont(font)
                .setText("Sensor")
                ;
+               
+  PID_label = cp5.addTextarea("PID_label_textarea")
+               .setPosition(250,450)
+               .setSize(175,50)
+               .setBorderColor(color(0))
+               .setColor(color(0))
+               .setFont(font)
+               ;
+  PID_label.setText("PID");
+  
+  P_term = cp5.addTextfield("p_input")
+               .setFont(font)
+               .setPosition(200, 480)
+               .setSize(50, 50)
+               .setAutoClear(false)
+               ;
+  P_term.setText("0");
+  
+  I_term = cp5.addTextfield("i_input")
+               .setFont(font)
+               .setPosition(250, 480)
+               .setSize(50, 50)
+               .setAutoClear(false)
+               ;
+  I_term.setText("0");
+  
+  D_term = cp5.addTextfield("d_input")
+               .setFont(font)
+               .setPosition(300, 480)
+               .setSize(50, 50)
+               .setAutoClear(false)
+               ;
+  D_term.setText("0");
+  
+  cp5.addBang("submit_PID").setPosition(350, 480).setSize(30, 30);
 }
 
 void draw(){
@@ -197,9 +237,9 @@ void draw(){
              ultrasonic.setText(val);
            //case "force":
            //  break;
-           case "button":
-             manual_toggle();
-             man_toggle.setValue(!manual);
+           //case "button":
+           //  manual_toggle();
+           //  man_toggle.setValue(!manual);
         }
       }
     }
@@ -225,7 +265,22 @@ void submit_stepper(){
   port.write(String.format("stepper:%d\n", stepper_ang));
 }
 
+
+void submit_dc_pos(){
+  stepper_ang = Integer.valueOf(cp5.get(Textfield.class,"dc_pos_input").getText());
+  port.write(String.format("stepper:%d\n", stepper_ang));
+}
+
+void submit_PID(){
+  float p = Integer.valueOf(cp5.get(Textfield.class,"p_input").getText());
+  float i = Integer.valueOf(cp5.get(Textfield.class,"i_input").getText());
+  float d = Integer.valueOf(cp5.get(Textfield.class,"d_input").getText());
+  port.write(String.format("PID:%.2f:%.2f:%.2f\n", p, i, d));
+}
+
 void manual_toggle(){
   manual = !manual;
+  String str = String.format("manual:%b\n", manual);
   port.write(String.format("manual:%b\n", manual));
+  println(str);
 }
