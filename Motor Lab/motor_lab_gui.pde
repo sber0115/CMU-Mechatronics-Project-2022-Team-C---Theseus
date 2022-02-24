@@ -40,7 +40,7 @@ Boolean manual = false;
 void setup(){
   size(600, 600); 
   
-  port = new Serial(this, "COM7", 115200); 
+  //port = new Serial(this, "COM7", 115200); 
   
   cp5 = new ControlP5(this);
   
