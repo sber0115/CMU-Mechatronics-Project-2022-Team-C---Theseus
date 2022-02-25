@@ -4,12 +4,11 @@ title: "ProjectManagement"
 permalink: /ProjectManagement/
 ---
 
-7. Project Management
-7.1 Schedule
+# Project Management
+## Schedule
 | Week | Progress |
 | --- | --- |
-1
-Initial concept discussion
+| 1 | Initial concept discussion |
 2
 Physical design consolidation, mock-up and parts selection
 3
