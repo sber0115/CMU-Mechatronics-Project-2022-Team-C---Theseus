@@ -48,6 +48,8 @@ Figure 4: Hardware Architecture
 Figure 5: Software Architecture Flowchart
 
 
+
+
 ![Fiduciary Marker](/images/fiduciary.jpg)
 
 Figure 6: Fiduciary Marker
