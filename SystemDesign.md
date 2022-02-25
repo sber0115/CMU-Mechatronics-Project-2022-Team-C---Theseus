@@ -74,8 +74,9 @@ Figure 9: Schematic Diagram of the Robot Arm Sub-assembly
 6.1.3 Robot Gripper Sub-assembly
 The robot gripper sub-assembly is designed to have three degrees of freedom as Figure 10 shows. The first motor of the gripper would open up and close down to grab targets. After that, the second motor would spin to perform operations on the targets. If the target is in horizontal orientation, the third motor would rotate the whole gripper assembly downward to allow the gripper to grasp it. For the gripper design, the top and bottom lips of the gripper would tightly grip a circular valve (Figure 11). High friction material would also be added to the inside of the lips to increase the friction. The center part of the gripper has a channel that goes through the front face. Along with two lips, this channel would be used to grab the lever valve. The top of the gripper is designed to have an extra length to make contact with the breaker box switch.
 
+![Mark I CAD Models](/images/gripper_isometric_view.png)
 Figure 10: Schematic Diagram of Robot Gripper Sub-assembly
-
+![Mark I CAD Models](/images/gripper_part_isometric_view.png)
 Figure 11: Schematic Diagram of Robot Gripper 
 
 ## Power Subsystem
