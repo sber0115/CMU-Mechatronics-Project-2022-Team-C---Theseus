@@ -1,3 +1,9 @@
+---
+layout: page
+title: "System Description"
+permalink: /SystemDescription/
+---
+
 # System Design
 ## Design Requirements
 Below is a list of requirements derived from the ShipBot specifications given to us as well as our own requirements based on our personal limitations/goals.
