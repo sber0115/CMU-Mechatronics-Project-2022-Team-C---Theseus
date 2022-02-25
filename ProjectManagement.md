@@ -22,25 +22,15 @@ markdown: kramdown
 | 11| Testing and final assembly |
 
 Table 3: Project Schedule
-7.2 Team Member Responsibility
-Team Members
-Primary Responsibility
-Secondary Responsibility
-Dajun Tao
-Control/Fabrication
-CAD/CAE/CV
-Ethan Rich
-Hardware
-Fabrication/Embedded SW
-Sam Yin
-CAD/CAE
-Control/CV/Fabrication
-Sebastian Bernal
-Embedded SW
-Hardware/Website
-Valmiki Kothare
-Perception/CV
-Control/Website
+
+# Team Member Responsibility
+| Team Members | Primary Responsibility | Secondary Responsibility |
+| --- | --- | --- |
+| Dajun Tao | Control/Fabrication | CAD/CAE/CV |
+| Ethan Rich | Hardware | Fabrication/Embedded SW |
+| Sam Yin | CAD/CAE | Control/CV/Fabrication |
+| Sebastian Bernal | Embedded SW | Hardware/Website |
+| Valmiki Kothare | Perception/CV | Control/Website |
 
 Table 4: Team Member Responsibilities
 7.3 Tentative Budget
