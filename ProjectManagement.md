@@ -10,26 +10,16 @@ markdown: kramdown
 | Week | Progress |
 | --- | --- |
 | 1 | Initial concept discussion |
-2
-Physical design consolidation, mock-up and parts selection
-3
-CAD development, mechanical and electrical architecture design
-4
-Collect CV images, order parts, control logic research 
-5
-Test parts, robot base frame test assembly
-6
-Design refinement, start CV training and initial control implementation 
-7
-CV training and camera calibration
-8
-Electronic test integration,  inverse kinematics implementation
-9
-Redesign parts fabrication and test fitting, CV testing 
-10
-System integration, assembly and testing with various scenarios 
-11
-Testing and final assembly
+| 2 | Physical design consolidation, mock-up and parts selection |
+| 3 | CAD development, mechanical and electrical architecture design |
+| 4 | Collect CV images, order parts, control logic research |
+| 5 | Test parts, robot base frame test assembly |
+| 6 | Design refinement, start CV training and initial control implementation  |
+| 7 | CV training and camera calibration |
+| 8 | Electronic test integration,  inverse kinematics implementation |
+| 9 | Redesign parts fabrication and test fitting, CV testing  |
+| 10| System integration, assembly and testing with various scenarios |
+| 11| Testing and final assembly |
 
 Table 3: Project Schedule
 7.2 Team Member Responsibility
