@@ -1,7 +1,7 @@
 ---
 layout: page
-title: "System Design"
-permalink: /SystemDesign/
+title: "ProjectManagement"
+permalink: /ProjectManagement/
 ---
 
 7. Project Management
