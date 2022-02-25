@@ -35,13 +35,15 @@ markdown: kramdown
 ## Tentative Budget
 | Item | Amount | Total Cost | Retailer |
 | --- | --- | --- | --- |
-| T-slotted framing rails 1”x1”x3’ | 4 | $58.16 | McMaster-Carr |
-| Extrusion corner bracket with nut and bolts (40 pcs) | 1 | $31.93 | Amazon.com |
+| 4040 Hollow Aluminum Extrusions 6 ft | 2 | $141.72 | McMaster-Carr |
+| 4040 Series Corner Bracket with scres and nuts | 10 | $18.99 | Amazon.com |
+| 4040 Series 3-Way End Corner Bracket | 8 | 27.98 | Amazon.com |
 | L16-P Miniature Linear Actuator with Feedback | 2 | $160 | Actuonix |
 | Flanged Bearing for T-slotted framing rails | 2 | $114.78 | McMaster-Carr |
+| Threaded Round Standoff Aluminum 1/4" OD, 1-1/2" Long, 4-40 Thread Size | 4 | 6.24 | McMaster-Carr |
 | 4pcs Mechanum wheel & motor set | 1 | $89 | Amazon.com |
 | Romeo BLE Quad | 4 | $160 | DF Robot |
-| DC 12 V Motor | 3 | $44.97 | Amazon.com |
+| DC 12 V Motor | 4 | $79.60 | Amazon.com |
 | Sum | | $658.87| |
 
 ## Risk Management
