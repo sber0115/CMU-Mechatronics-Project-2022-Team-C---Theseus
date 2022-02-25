@@ -1,7 +1,7 @@
 ---
 layout: page
-title: "System Description"
-permalink: /SystemDescription/
+title: "System Design"
+permalink: /SystemDesign/
 ---
 
 # System Design
