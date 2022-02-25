@@ -33,41 +33,19 @@ Table 3: Project Schedule
 | Valmiki Kothare | Perception/CV | Control/Website |
 
 Table 4: Team Member Responsibilities
-7.3 Tentative Budget
-Item
-Amount
-Total Cost
-Retailer
-T-slotted framing rails 1”x1”x3’
-4
-$58.16
-McMaster-Carr
-Extrusion corner bracket with nut and bolts (40 pcs)
-1
-$31.93
-Amazon.com
-L16-P Miniature Linear Actuator with Feedback
-2
-$160
-Actuonix
-Flanged Bearing for T-slotted framing rails
-2
-$114.78
-McMaster-Carr
-4pcs Mechanum wheel & motor set
-1
-$89
-Amazon.com
-Romeo BLE Quad
-4
-$160
-DF Robot
-DC 12 V Motor
-3
-$44.97
-Amazon.com
-Sum
-$658.87
+
+
+# Tentative Budget
+| Item | Amount | Total Cost | Retailer |
+| --- | --- | --- | --- |
+| T-slotted framing rails 1”x1”x3’ | 4 | $58.16 | McMaster-Carr |
+| Extrusion corner bracket with nut and bolts (40 pcs) | 1 | $31.93 | Amazon.com |
+| L16-P Miniature Linear Actuator with Feedback | 2 $160 | Actuonix |
+| Flanged Bearing for T-slotted framing rails | 2 | $114.78 | McMaster-Carr |
+| 4pcs Mechanum wheel & motor set | 1 | $89 | Amazon.com |
+| Romeo BLE Quad | 4 | $160 | DF Robot |
+| DC 12 V Motor | 3 | $44.97 | Amazon.com |
+| Sum | | $658.87| |
 
 
 
