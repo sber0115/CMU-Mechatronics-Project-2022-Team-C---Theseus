@@ -43,7 +43,7 @@ Figure 4: Hardware Architecture
 (Note: that the batteries are powered through the MIPI interface connection)
 ### Software Architecture
 
-![Software Architecture](/iamges/SoftwareArchitecture.png "Software Architecture Flowchart")
+![Software Architecture](/images/SoftwareArchitecture.png "Software Architecture Flowchart")
 
 Figure 6: Fiduciary Marker
 
