@@ -21,7 +21,8 @@ markdown: kramdown
 | 10| System integration, assembly and testing with various scenarios |
 | 11| Testing and final assembly |
 
-Table 3: Project Schedule
+Project Schedule
+
 
 ## Team Member Responsibility
 | Team Members | Primary Responsibility | Secondary Responsibility |
@@ -32,7 +33,7 @@ Table 3: Project Schedule
 | Sebastian Bernal | Embedded SW | Hardware/Website |
 | Valmiki Kothare | Perception/CV | Control/Website |
 
-Table 4: Team Member Responsibilities
+Team Member Responsibilities
 
 
 ## Tentative Budget
@@ -47,7 +48,7 @@ Table 4: Team Member Responsibilities
 | DC 12 V Motor | 3 | $44.97 | Amazon.com |
 | Sum | | $658.87| |
 
-Figure 5: Tentative Budget
+Tentative Budget
 
 ## Risk Management
 Due to the limited budget, and the high price of several components, like linear actuators and mecanum wheels, components should have reasonable specifications, and certain less important components should be chosen with lower specifications to reduce cost. For linear actuators, only the vertical part needs to generate high torque, so the horizon linear actuator could have a lower torque payload. Also, due to the size of the testing environment and the stroke length of the linear actuator should be lower than the height of the targets. For mecanum wheels, different load capacity would influence the cost, so choosing lower load capacity would reduce the overall cost. Moreover, using existing components from previous teams could also help to reduce components costs and long parts wait time.
