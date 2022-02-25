@@ -44,9 +44,11 @@ Figure 4: Hardware Architecture
 ### Software Architecture
 
 ![Software Architecture](/images/SoftwareArchitecture.png)
+
 Figure 5: Software Architecture Flowchart
 
 ![Fiduciary Marker](/images/fiduciary.jpg)
+
 Figure 6: Fiduciary Marker
 
 The block diagram in Figure 6 describes the approximate architecture of the autonomous software we plan on implementing for the ShipBot. The autonomous action begins by processing the RGB camera data and using this data to scan the testbed from our initial position, in search of a fiduciary of our choice on the testbed. Currently the plan is to use the bracket in Figure 6 as the fiduciary, as it is the most distinct and discernible part of the testbed that does not change position with different testbed configurations. If the fiduciary is not in frame, the robot will turn in search of the fiduciary, and will continue to turn until it is detected in frame. The detection and localization of this fiduciary will be handled either by a CNN or more conventional image processing methods to extract the bracket from the whole image.
