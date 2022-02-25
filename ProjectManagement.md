@@ -2,6 +2,7 @@
 layout: page
 title: "ProjectManagement"
 permalink: /ProjectManagement/
+markdown: kramdown
 ---
 
 # Project Management
