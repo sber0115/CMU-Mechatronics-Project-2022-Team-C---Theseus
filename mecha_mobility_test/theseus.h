@@ -4,17 +4,10 @@
 #define theseus_h
 
   struct motor_t {
-    uint8_t EN;
     uint8_t IN1;
     uint8_t IN2;
     uint8_t ENCA;
     uint8_t ENCB;
-  };
-
-  enum dir_t {
-    CW,
-    CCW,
-    BRAKE
   };
 
   enum move_t {
@@ -22,13 +15,15 @@
     BACK=1,
     LEFT=2,
     RIGHT=3,
-    FWD_L=4,
-    FWD_R=5,
-    BACK_L=6,
-    BACK_R=7,
-    ROTATE_CW=8,
-    ROTATE_CCW=9,
-    STOP=10
+    ROT_CW=4,
+    ROT_CCW=5,
+    STOP=6
+  };
+  
+  enum dir_t {
+    CW=1,
+    CCW=2,
+    BRAKE=0
   };
 
   enum msg_t {
@@ -38,13 +33,14 @@
 
   struct msg_test {
     uint8_t id;
-    uint8_t data[2];
+    uint8_t data[3];
   };
 
   struct msg_move_t {
-    uint8_t id;
-    uint8_t directive;
-    uint8_t speed;
+    uint8_t dir;
+    uint8_t x_vel;
+    uint8_t y_vel;
+    uint8_t r_vel;
   };
 
 #endif
