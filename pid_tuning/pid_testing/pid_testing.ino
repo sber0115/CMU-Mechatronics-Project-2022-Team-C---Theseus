@@ -4,6 +4,9 @@
 // MCU I2C address
 const uint8_t SELF_ADDRESS = 0x08;
 
+// number of motors
+const uint8_t NMOTORS = 4;
+
 // i2c message buffers 
 const uint8_t RX_BUF_SIZE = 5;
 const uint8_t TX_BUF_SIZE = 5;
@@ -15,6 +18,13 @@ volatile int16_t x_cmd = 0;
 volatile int16_t y_cmd = 0;
 volatile int16_t r_cmd = 0;
 
+// Globals
+long prevT = 0;
+volatile int posi[] = {0,0};
+
+// PID class instances
+SimplePID pid[NMOTORS];
+
 /*
  * motor driver pins
  *
@@ -25,7 +35,7 @@ volatile int16_t r_cmd = 0;
  *  M2       M4 <- reversed
  *    (back )
  *              ~=PWM, *=INTERRUPT
- */           // IN1~, IN2, ENCA*, ENCB*              
+ */           // IN1~, IN2, ENCA*, ENCB*, EN*           
 motor_t M1 = {3,4,20,21};
 motor_t M2 = {5,8,16,17}; 
 motor_t M3 = {6,7,14,15}; 
@@ -44,9 +54,20 @@ void setup() {
   motor_initialize(M3);
   motor_initialize(M4);  
 
+  for(int k = 0; k < NMOTORS; k++){
+    pid[k].setParams(1,0,0,255);
+  }
+
   Wire.begin(SELF_ADDRESS);
   Wire.onRequest(event_tx_msg);
   Wire.onReceive(event_rx_msg);
+
+  attachInterrupt(digitalPinToInterrupt(M1.ENCA),readEncoder<0>,RISING);
+  attachInterrupt(digitalPinToInterrupt(M2.ENCB),readEncoder<1>,RISING);
+  attachInterrupt(digitalPinToInterrupt(M3.ENCA),readEncoder<3>,RISING);
+  attachInterrupt(digitalPinToInterrupt(M4.ENCB),readEncoder<4>,RISING);
+  
+  Serial.println("target pos");
 }
 
 void loop() {
@@ -73,6 +94,41 @@ void loop() {
   move(STOP, 0);
   delay(5000);  
   */
+
+    // set target position
+  int target[NMOTORS];
+  target[0] = 750*sin(prevT/1e6);
+  target[1] = -750*sin(prevT/1e6);
+
+  // time difference
+  long currT = micros();
+  float deltaT = ((float) (currT - prevT))/( 1.0e6 );
+  prevT = currT;
+
+  // Read the position in an atomic block to avoid a potential misread
+  int pos[NMOTORS];
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
+    for(int k = 0; k < NMOTORS; k++){
+      pos[k] = posi[k];
+    }
+  }
+  
+  // loop through the motors
+  for(int k = 0; k < NMOTORS; k++){
+    int pwr, dir;
+    // evaluate the control signal
+    pid[k].evalu(pos[k],target[k],deltaT,pwr,dir);
+    // signal the motor
+    setMotor(dir,pwr,pwm[k],in1[k],in2[k]);
+  }
+  
+  for(int k = 0; k < NMOTORS; k++){
+    Serial.print(target[k]);
+    Serial.print(" ");
+    Serial.print(pos[k]);
+    Serial.print(" ");
+  }
+  Serial.println();
 }
 
 void read_motor_command(uint8_t *rx_buf) {
@@ -176,6 +232,54 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
       break;  
   }
   return;
+}
+
+void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+  analogWrite(pwm,pwmVal);
+  if(dir == 1){
+    digitalWrite(in1,HIGH);
+    digitalWrite(in2,LOW);
+  }
+  else if(dir == -1){
+    digitalWrite(in1,LOW);
+    digitalWrite(in2,HIGH);
+  }
+  else{
+    digitalWrite(in1,LOW);
+    digitalWrite(in2,LOW);
+  }  
+}
+
+
+template <int j>
+void readEncoder(){
+  int b = digitalRead(encb[j]);
+  if(b > 0){
+    posi[j]++;
+  }
+  else{
+    posi[j]--;
+  }
+}
+
+void update_motors() {
+
+  pid[0].evalu[pos[0],target[0],deltaT,pwr,dir);
+  pid[1].evalu[pos[1],target[1],deltaT,pwr,dir);
+  pid[2].evalu[pos[2],target[2],deltaT,pwr,dir);
+  pid[3].evalu[pos[3],target[3],deltaT,pwr,dir);
+
+
+
+  
+  // loop through the motors
+  for(int k = 0; k < NMOTORS; k++){
+    int pwr, dir;
+    // evaluate the control signal
+    pid[k].evalu(pos[k],target[k],deltaT,pwr,dir);
+    // signal the motor
+    setMotor(dir,pwr,pwm[k],in1[k],in2[k]);
+  }
 }
 
 /*
