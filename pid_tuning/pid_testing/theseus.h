@@ -5,14 +5,16 @@
 #ifndef theseus_h
 #define theseus_h
 
-  typedef struct {
+  struct motor_t{
     uint8_t IN1;
     uint8_t IN2;
     uint8_t ENCA;
     uint8_t ENCB;
     uint8_t EN;
-  } motor_t;
+  };
 
+  struct motor_t motor_array[4];
+  
   enum move_t {
     FWD=0,
     BACK=1,

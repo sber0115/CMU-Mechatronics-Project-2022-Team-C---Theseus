@@ -5,13 +5,16 @@
 const uint8_t SELF_ADDRESS = 0x08;
 
 // number of motors
-const uint8_t NMOTORS = 4;
+const uint8_t NMOTORS = 3;
 
 // i2c message buffers 
 const uint8_t RX_BUF_SIZE = 5;
 const uint8_t TX_BUF_SIZE = 5;
 volatile uint8_t rx_buf[RX_BUF_SIZE];
 volatile uint8_t tx_buf[TX_BUF_SIZE];
+
+float target_f[] = {0, 0, 0, 0};
+long target[] = {0, 0, 0, 0};
 
 // current velocity command from CCU
 volatile int16_t x_cmd = 0;
@@ -20,7 +23,7 @@ volatile int16_t r_cmd = 0;
 
 // Globals
 long prevT = 0;
-volatile int posi[] = {0,0};
+volatile int posi[] = {0, 0, 0, 0};
 
 // PID class instances
 SimplePID pid[NMOTORS];
@@ -35,11 +38,7 @@ SimplePID pid[NMOTORS];
  *  M2       M4 <- reversed
  *    (back )
  *              ~=PWM, *=INTERRUPT
- */           // IN1~, IN2, ENCA*, ENCB*, EN*           
-motor_t M1 = {3,4,20,21};
-motor_t M2 = {5,8,16,17}; 
-motor_t M3 = {6,7,14,15}; 
-motor_t M4 = {9,10,11,12};  
+ */           // IN1~, IN2, ENCA*, ENCB*, EN*   
 
 // current velocity setpoints 
 int32_t x_vel_sp = 0; // +x -> FWD,   -x -> BACK
@@ -49,64 +48,41 @@ int32_t r_vel_sp = 0; // +r -> CW,    -r -> CCW
 void setup() {
   Serial.begin(115200);
 
-  motor_initialize(M1);
-  motor_initialize(M2);
-  motor_initialize(M3);
-  motor_initialize(M4);  
+  //13, 17
+  motor_array[0] = {2, 4, 20, 21, 3};
+  motor_array[1] = {6, 7, 19, 18, 5}; 
+  motor_array[2] = {8, 15, 16, 14, 9}; 
+  motor_array[3] = {1, 1, 1, 1, 10};  
 
-  for(int k = 0; k < NMOTORS; k++){
-    pid[k].setParams(1,0,0,255);
+  for (int k = 0; k < NMOTORS; k++) {
+    motor_initialize(motor_array[k]);
+    pid[k].setParams(1, 0, 0, 255);
   }
 
   Wire.begin(SELF_ADDRESS);
   Wire.onRequest(event_tx_msg);
   Wire.onReceive(event_rx_msg);
 
-  attachInterrupt(digitalPinToInterrupt(M1.ENCA),readEncoder<0>,RISING);
-  attachInterrupt(digitalPinToInterrupt(M2.ENCB),readEncoder<1>,RISING);
-  attachInterrupt(digitalPinToInterrupt(M3.ENCA),readEncoder<3>,RISING);
-  attachInterrupt(digitalPinToInterrupt(M4.ENCB),readEncoder<4>,RISING);
+  attachInterrupt(digitalPinToInterrupt(motor_array[0].ENCA),readEncoder<0>,RISING);
+  attachInterrupt(digitalPinToInterrupt(motor_array[1].ENCA),readEncoder<1>,RISING);
+  attachInterrupt(digitalPinToInterrupt(motor_array[2].ENCA),readEncoder<3>,RISING);
+  attachInterrupt(digitalPinToInterrupt(motor_array[3].ENCA),readEncoder<4>,RISING);
   
-  Serial.println("target pos");
+  //Serial.println("target pos");
 }
 
 void loop() {
-  /*
-  Serial.println("FWD");
-  move(FWD, 150);
-  delay(1000);
-  Serial.println("BACK");
-  move(BACK, 150);
-  delay(1000);
-  Serial.println("LEFT");
-  move(LEFT, 150);
-  delay(1000);
-  Serial.println("RIGHT");
-  move(RIGHT, 150);
-  delay(1000);
-  Serial.println("ROTATE CW");
-  move(ROT_CW, 150);
-  delay(1000);
-  Serial.println("ROTATE CCW");
-  move(ROT_CCW, 150);
-  delay(1000);
-  Serial.println("STOP");
-  move(STOP, 0);
-  delay(5000);  
-  */
-
-    // set target position
-  int target[NMOTORS];
-  target[0] = 750*sin(prevT/1e6);
-  target[1] = -750*sin(prevT/1e6);
-
+  
   // time difference
   long currT = micros();
   float deltaT = ((float) (currT - prevT))/( 1.0e6 );
   prevT = currT;
 
+  setTarget(currT/1.0e6,deltaT);
+  
   // Read the position in an atomic block to avoid a potential misread
   int pos[NMOTORS];
+  
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
     for(int k = 0; k < NMOTORS; k++){
       pos[k] = posi[k];
@@ -117,18 +93,19 @@ void loop() {
   for(int k = 0; k < NMOTORS; k++){
     int pwr, dir;
     // evaluate the control signal
-    pid[k].evalu(pos[k],target[k],deltaT,pwr,dir);
+    pid[k].evalu(pos[k], target[k], deltaT, pwr, dir);
     // signal the motor
-    setMotor(dir,pwr,pwm[k],in1[k],in2[k]);
+    setMotor(dir, pwr, motor_array[k].EN, motor_array[k].IN1, motor_array[k].IN2);
   }
   
   for(int k = 0; k < NMOTORS; k++){
+    Serial.print("Target:");
     Serial.print(target[k]);
     Serial.print(" ");
+    Serial.print("Pos: ");
     Serial.print(pos[k]);
-    Serial.print(" ");
   }
-  Serial.println();
+  Serial.println(" ");
 }
 
 void read_motor_command(uint8_t *rx_buf) {
@@ -144,53 +121,6 @@ void read_motor_command(uint8_t *rx_buf) {
     x_vel_sp = rx_buf[3] * (x_sgn ? -1 : 1);
   }
   return;
-}
-
-void move(move_t directive, uint8_t speed) {
-  switch(directive) {
-    case FWD:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case BACK:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CW);
-      break;
-    case LEFT:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CW);
-      break;
-    case RIGHT:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case ROT_CW:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CW);
-      break;
-    case ROT_CCW:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case STOP: 
-      motor_drive(M1, 0, BRAKE);
-      motor_drive(M2, 0, BRAKE);
-      motor_drive(M3, 0, BRAKE);
-      motor_drive(M4, 0, BRAKE);
-      break;
-  }
 }
 
 /*
@@ -251,9 +181,44 @@ void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
 }
 
 
+void setTarget(float t, float deltat){
+
+  float positionChange[4] = {0.0, 0.0, 0.0, 0.0};
+  float pulsesPerTurn = 16*50; 
+  float pulsesPerMeter = pulsesPerTurn*1.641;
+
+  t = fmod(t,12); // time is in seconds
+
+  //the current program goes 1 meter every 4 seconds
+  float velocity = 0.25; // m/s
+
+  if(t < 4){
+  }
+  else if(t < 8){
+    for(int k = 0; k < 4; k++){ 
+      positionChange[k] = velocity*deltat*pulsesPerMeter;
+    }
+  }
+  else{
+    for(int k = 0; k < 4; k++){ 
+      positionChange[k] = -velocity*deltat*pulsesPerMeter; 
+    } 
+  }  
+
+  for(int k = 0; k < 4; k++){
+    target_f[k] = target_f[k] + positionChange[k];
+  }
+  
+  target[0] = (long) target_f[0];
+  target[1] = (long) target_f[1];
+  target[2] = (long) -target_f[2];
+  target[3] = (long) -target_f[3];
+}
+
+
 template <int j>
 void readEncoder(){
-  int b = digitalRead(encb[j]);
+  int b = digitalRead(motor_array[j].ENCB);
   if(b > 0){
     posi[j]++;
   }
@@ -262,25 +227,6 @@ void readEncoder(){
   }
 }
 
-void update_motors() {
-
-  pid[0].evalu[pos[0],target[0],deltaT,pwr,dir);
-  pid[1].evalu[pos[1],target[1],deltaT,pwr,dir);
-  pid[2].evalu[pos[2],target[2],deltaT,pwr,dir);
-  pid[3].evalu[pos[3],target[3],deltaT,pwr,dir);
-
-
-
-  
-  // loop through the motors
-  for(int k = 0; k < NMOTORS; k++){
-    int pwr, dir;
-    // evaluate the control signal
-    pid[k].evalu(pos[k],target[k],deltaT,pwr,dir);
-    // signal the motor
-    setMotor(dir,pwr,pwm[k],in1[k],in2[k]);
-  }
-}
 
 /*
  * event_tx_msg(): Event handler when I2C message requested by master
