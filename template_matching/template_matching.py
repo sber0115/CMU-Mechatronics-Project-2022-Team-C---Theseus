@@ -44,7 +44,7 @@ def main():
     cv.imwrite("results/spade-terminal-output.png", img)
     cv.waitKey()
     cv.destroyAllWindows()
-     
+    
 
 if __name__ == "__main__":
     main()
