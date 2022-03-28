@@ -1,35 +1,45 @@
-#include <Wire.h>
 #include "theseus.h"
 
 // MCU I2C address
 const uint8_t SELF_ADDRESS = 0x08;
 
-// number of motors
-const uint8_t NMOTORS = 4;
+// motor pins
+const uint8_t NUM_MOTORS = 4;
+motor_t M1 = {56, 57, 55, 54, 11};
+motor_t M2 = {61, 60, 58, 59, 10};
+motor_t M3 = {24, 25, 22, 23, 0};
+motor_t M4 = {28, 29, 26, 27, 1}; 
 
-//number of encoder pulses per full rotation
-const uint32_t pulses_per_turn = 16*50;
+Encoder M1_encoder(M1.ENCA, M1.ENCB); 
+Encoder M2_encoder(M2.ENCA, M2.ENCB); 
+Encoder M3_encoder(M3.ENCA, M3.ENCB); 
+Encoder M4_encoder(M4.ENCA, M4.ENCB); 
+
+const pid_constants_t M1_PID = {1,0,0,255};
+const pid_constants_t M2_PID = {1,0,0,255};
+const pid_constants_t M3_PID = {1,0,0,255};
+const pid_constants_t M4_PID = {1,0,0,255};
+
+// motor constants
+const uint32_t ENCODER_PULSES_PER_ROTATION = 16*50;
+const uint32_t PULSES_PER_CM = ENCODER_PULSES_PER_ROTATION * 3280;
+const uint32_t MOTOR_VELOCITY_MAX = 25; // cm/s
 
 // i2c message buffers 
 const uint8_t RX_BUF_SIZE = 5;
 const uint8_t TX_BUF_SIZE = 5;
-volatile uint8_t rx_buf[RX_BUF_SIZE];
-volatile uint8_t tx_buf[TX_BUF_SIZE];
-
-float target_f[] = {0, 0, 0, 0};
-long target[] = {0, 0, 0, 0};
+static volatile uint8_t rx_buf[RX_BUF_SIZE];
+static volatile uint8_t tx_buf[TX_BUF_SIZE];
 
 // current velocity command from CCU
-volatile int16_t x_cmd = 0;
-volatile int16_t y_cmd = 0;
-volatile int16_t r_cmd = 0;
+static volatile int16_t x_cmd = 0;
+static volatile int16_t y_cmd = 0;
+static volatile int16_t r_cmd = 0;
+
 
 // Globals
-long prevT = 0;
-volatile int posi[] = {0, 0, 0, 0};
-
-// PID class instances
-SimplePID pid[NMOTORS];
+static int32_t target_pos[] = {0, 0, 0, 0};
+static volatile int32_t global_pos[] = {0, 0, 0, 0};
 
 /*
  * motor driver pins
@@ -51,79 +61,130 @@ int32_t r_vel_sp = 0; // +r -> CW,    -r -> CCW
 void setup() {
   Serial.begin(115200);
 
-  motor_array[0] = {56, 57, 55, 54, 11};
-  motor_array[1] = {61, 60, 58, 59, 10};
-  motor_array[2] = {24, 25, 22, 23, 0};
-  motor_array[3] = {28, 29, 26, 27, 1}; 
+  motor_initialize(M1);
+  motor_initialize(M2);
+  motor_initialize(M3);
+  motor_initialize(M4);
 
-
-  for (int k = 0; k < NMOTORS; k++) {
-    motor_initialize(motor_array[k]);
-    pid[k].setParams(1, 0, 0, 150);
-  }
+  M1_encoder.write(0);
+  M2_encoder.write(0);
+  M3_encoder.write(0);
+  M4_encoder.write(0);
 
   Wire.begin(SELF_ADDRESS);
   Wire.onRequest(event_tx_msg);
   Wire.onReceive(event_rx_msg);
 
-  attachInterrupt(digitalPinToInterrupt(motor_array[0].ENCA),readEncoder<0>,RISING);
-  attachInterrupt(digitalPinToInterrupt(motor_array[1].ENCA),readEncoder<1>,RISING);
-  attachInterrupt(digitalPinToInterrupt(motor_array[2].ENCA),readEncoder<3>,RISING);
-  attachInterrupt(digitalPinToInterrupt(motor_array[3].ENCA),readEncoder<4>,RISING);
   
-  //Serial.println("target pos");
+  
 }
 
 void loop() {
   
-  // time difference
-  long currT = micros();
-  float deltaT = ((float) (currT - prevT))/( 1.0e6 );
-  prevT = currT;
 
-  setTarget(currT/1.0e6,deltaT);
   
-  // Read the position in an atomic block to avoid a potential misread
-  int pos[NMOTORS];
-  
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
-    for(int k = 0; k < NMOTORS; k++){
-      pos[k] = posi[k];
-    }
-  }
-  
-  // loop through the motors
-  for(int k = 0; k < NMOTORS; k++){
-    int pwr, dir;
-    // evaluate the control signal
-    pid[k].evalu(pos[k], target[k], deltaT, pwr, dir);
-    // signal the motor
-    setMotor(dir, pwr, motor_array[k].EN, motor_array[k].IN1, motor_array[k].IN2);
-  }
-  
-  for(int k = 0; k < NMOTORS; k++){
-    Serial.print("Target:");
-    Serial.print(target[k]);
-    Serial.print(" ");
-    Serial.print("Pos: ");
-    Serial.print(pos[k]);
-  }
-  Serial.println(" ");
 }
 
-void read_motor_command(uint8_t *rx_buf) {
-  if(rx_buf == NULL) {
-    Serial.println("ERROR: Null pointer rx_buf(). No dir ");
-  } else {
-    bool r_sgn = bitRead(rx_buf[0],0);
-    bool y_sgn = bitRead(rx_buf[0],1);
-    bool x_sgn = bitRead(rx_buf[0],2);
+void pid_evaluate(int16_t curr_pos, int16_t target_pos, uint16_t dt, int32_t *prev_error, int32_t *error_integral, pid_constants_t constants, uint8_t *motor_power, dir_t *motor_dir) {
   
-    r_vel_sp = rx_buf[1] * (r_sgn ? -1 : 1);
-    y_vel_sp = rx_buf[2] * (y_sgn ? -1 : 1);
-    x_vel_sp = rx_buf[3] * (x_sgn ? -1 : 1);
-  }
+  int32_t error = target_pos - curr_pos;
+  int32_t dedt = (error - *prev_error)/dt;
+  *error_integral += + error*dt;
+  
+  int32_t control_signal = constants.KP*error + constants.KD*dedt + constants.KI * (*error_integral);
+  
+  uint32_t control_magnitude = abs(control_signal);
+  
+  *motor_power = constrain(control_magnitude, 0, constants.UMAX);
+  *motor_dir = (control_signal >= 0) ? CW : CCW;
+
+  *prev_error = error;
+}
+
+void do_pid(motor_t motor, pid_constants_t constants) {
+  // time difference calculations for PID
+  static uint32_t prev_time = 0;
+  uint32_t curr_time = micros();
+  uint32_t dt = curr_time - prev_time;
+  prev_time = curr_time;
+
+  set_target(curr_time, dt);
+
+  int32_t pos[NUM_MOTORS];
+  // saving local copy in atomic block to prevent changes
+  noInterrupts();
+    pos[0] = global_pos[0];
+    pos[1] = global_pos[1];
+    pos[2] = global_pos[2];
+    pos[3] = global_pos[3];
+  interrupts();
+
+  uint8_t motor_power = 0;
+  dir_t motor_dir = BRAKE;
+
+  static int32_t prev_error[NUM_MOTORS];
+  static int32_t error_integral[NUM_MOTORS];
+
+  pid_evaluate(pos[0], target_pos[0], dt, &prev_error[0], &error_integral[0], constants, &motor_power, &motor_dir);
+  motor_drive(motor, motor_power, motor_dir);
+
   return;
+}
+
+void set_target(uint32_t t, int32_t dt) {
+
+  //64 encoder counts per rotation
+  //We are only worried about 16 of them (when ENA is a rising edge)
+  //because that's when the interrupts are called
+
+  //Gear-ratio: 50:1
+  
+  int32_t motor_pos_change[4] = {0, 0, 0, 0}; 
+
+  //mechanum wheels have diameter of 97mm
+  //circumferance in meters = (pi*0.097) = 0.03
+  //so 1 full rotation = 0.03m of travel
+
+  //1 full rotation /0.03m = how many rotations per meter of travel
+  //(1 full rotation / 0.03m) * (encoder pulses / full rotation) = encoder pulses / m
+
+  t = t % 12; // time is in seconds
+
+
+  //TO DO: change this to RPM
+  //evaluating position change in encoder pulses
+  //determines how many encoder pulses are needed to reach target velocity
+
+  if(t < 4) {
+    // do nothing
+  }  else if(t < 8) {
+    motor_pos_change[0] = (dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+    motor_pos_change[1] = (dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+    motor_pos_change[2] = (dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+    motor_pos_change[3] = (dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+  }  else{
+    motor_pos_change[0] = -(dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+    motor_pos_change[1] = -(dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+    motor_pos_change[2] = -(dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+    motor_pos_change[3] = -(dt * PULSES_PER_CM) / MOTOR_VELOCITY_MAX;
+  }  
+  
+  target_pos[0] += motor_pos_change[0];
+  target_pos[1] += motor_pos_change[1];
+  target_pos[2] += motor_pos_change[2];
+  target_pos[3] += motor_pos_change[3];
+}
+
+
+template <int j>
+void readEncoder(){
+  int b = digitalRead(motor_array[j].ENCB);
+  if(b > 0){
+    global_pos[j]++;
+  }
+  else{
+    global_pos[j]--;
+  }
 }
 
 /*
@@ -131,6 +192,7 @@ void read_motor_command(uint8_t *rx_buf) {
  *   motor_t motor   - DC motor to initialize
  */
 void motor_initialize(motor_t motor) {
+  pinMode(motor.EN, OUTPUT);
   pinMode(motor.IN1, OUTPUT);
   pinMode(motor.IN2, OUTPUT);
   pinMode(motor.ENCA, INPUT);
@@ -167,91 +229,25 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
   return;
 }
 
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
-  analogWrite(pwm,pwmVal);
-  if(dir == 1){
-    digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+/*
+ * read_motor_command() - Parses I2C message into command for shipbot
+ * 
+ *
+ */
+void read_motor_command(uint8_t *rx_buf) {
+  if(rx_buf == NULL) {
+    Serial.println("ERROR: Null pointer rx_buf(). No dir ");
+  } else {
+    bool r_sgn = bitRead(rx_buf[0],0);
+    bool y_sgn = bitRead(rx_buf[0],1);
+    bool x_sgn = bitRead(rx_buf[0],2);
+  
+    r_vel_sp = rx_buf[1] * (r_sgn ? -1 : 1);
+    y_vel_sp = rx_buf[2] * (y_sgn ? -1 : 1);
+    x_vel_sp = rx_buf[3] * (x_sgn ? -1 : 1);
   }
-  else if(dir == -1){
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
-  }
-  else{
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);
-  }  
+  return;
 }
-
-
-void setTarget(float t, float deltat){
-
-  //64 encoder counts per rotation
-  //We are only worried about 16 of them (when ENA is a rising edge)
-  //because that's when the interrupts are called
-
-  //Gear-ratio: 50:1
-  
-  float positionChange[4] = {0.0, 0.0, 0.0, 0.0};
-
-  //There are 16*50 pulses per rotation of the output shaft
-  float pulsesPerTurn = 16*50; 
-
-  //mechanum wheels have diameter of 97mm
-  //circumferance in meters = (pi*0.097) = 0.03
-  //so 1 full rotation = 0.03m of travel
-
-  //1 full rotation /0.03m = how many rotations per meter of travel
-  //(1 full rotation / 0.03m) * (encoder pulses / full rotation) = encoder pulses / m
-  float pulsesPerMeter = pulsesPerTurn*32.8;
-
-  t = fmod(t,12); // time is in seconds
-
-  //the current program goes 1 meter every 4 seconds
-  float velocity = 0.25; // m/s
-
-  //TO DO: change this to RPM
-  
-  
-
-  //evaluating position change in encoder pulses
-  //determines how many encoder pulses are needed to reach target velocity
-
-  if(t < 4){
-  }
-  else if(t < 8){
-    for(int k = 0; k < 4; k++){ 
-      positionChange[k] = velocity*deltat*pulsesPerMeter;
-    }
-  }
-  else{
-    for(int k = 0; k < 4; k++){ 
-      positionChange[k] = -velocity*deltat*pulsesPerMeter; 
-    } 
-  }  
-
-  for(int k = 0; k < 4; k++){
-    target_f[k] = target_f[k] + positionChange[k];
-  }
-  
-  target[0] = (long) target_f[0];
-  target[1] = (long) target_f[1];
-  target[2] = (long) target_f[2];
-  target[3] = (long) target_f[3];
-}
-
-
-template <int j>
-void readEncoder(){
-  int b = digitalRead(motor_array[j].ENCB);
-  if(b > 0){
-    posi[j]++;
-  }
-  else{
-    posi[j]--;
-  }
-}
-
 
 /*
  * event_tx_msg(): Event handler when I2C message requested by master
@@ -271,21 +267,10 @@ void event_rx_msg(int num_bytes) {
   uint8_t bytes_read = 0;
   while((Wire.available() != 0) && (bytes_read < RX_BUF_SIZE)) {
     rx_buf[bytes_read] = Wire.read();
-    //Serial.println("PRINTING RX");
-    //Serial.print(rx_buf[bytes_read]);
     bytes_read++;
   }
-  //Serial.println();
-
-  Serial.print("Read message: ");
-  for (int i = 0; i < RX_BUF_SIZE; i++){
-    Serial.print(rx_buf[i]);
-  }
-  Serial.println();
   
-  memcpy(tx_buf, rx_buf, sizeof(rx_buf[0]*RX_BUF_SIZE));
-
-  Wire.write((uint8_t *) &tx_buf, TX_BUF_SIZE);
-
+  // memcpy(tx_buf, rx_buf, sizeof(rx_buf[0]*RX_BUF_SIZE));
+  // Wire.write((uint8_t *) &tx_buf, TX_BUF_SIZE);
   return;
 }
