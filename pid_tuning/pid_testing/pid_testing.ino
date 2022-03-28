@@ -51,10 +51,10 @@ int32_t r_vel_sp = 0; // +r -> CW,    -r -> CCW
 void setup() {
   Serial.begin(115200);
 
-  motor_array[0] = {56, 57, 55, 54, 11};
+  motor_array[0] = {56, 57, 54, 55, 11};
   motor_array[1] = {61, 60, 58, 59, 10};
-  motor_array[2] = {24, 25, 22, 23, 0};
-  motor_array[3] = {28, 29, 26, 27, 1}; 
+  motor_array[2] = {24, 25, 22, 23, 2};
+  motor_array[3] = {28, 29, 26, 27, 3}; 
 
 
   for (int k = 0; k < NMOTORS; k++) {
@@ -100,7 +100,8 @@ void loop() {
     // signal the motor
     setMotor(dir, pwr, motor_array[k].EN, motor_array[k].IN1, motor_array[k].IN2);
   }
-  
+
+  /*
   for(int k = 0; k < NMOTORS; k++){
     Serial.print("Target:");
     Serial.print(target[k]);
@@ -109,6 +110,15 @@ void loop() {
     Serial.print(pos[k]);
   }
   Serial.println(" ");
+  */
+
+  Serial.print("Target 0: ");
+  Serial.print(target[0]);
+  Serial.print(" ");
+  Serial.print("Pos: ");
+  Serial.print(pos[0]);
+  Serial.println(" ");
+  
 }
 
 void read_motor_command(uint8_t *rx_buf) {
@@ -134,7 +144,8 @@ void motor_initialize(motor_t motor) {
   pinMode(motor.IN1, OUTPUT);
   pinMode(motor.IN2, OUTPUT);
   pinMode(motor.ENCA, INPUT);
-  pinMode(motor.ENCB, INPUT);  
+  pinMode(motor.ENCB, INPUT);
+  pinMode(motor.EN, OUTPUT);  
   return;
 }
 
@@ -168,7 +179,7 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
 }
 
 void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
-  analogWrite(pwm,pwmVal);
+  analogWrite(pwm, pwmVal);
   if(dir == 1){
     digitalWrite(in1,HIGH);
     digitalWrite(in2,LOW);
@@ -212,8 +223,6 @@ void setTarget(float t, float deltat){
 
   //TO DO: change this to RPM
   
-  
-
   //evaluating position change in encoder pulses
   //determines how many encoder pulses are needed to reach target velocity
 
