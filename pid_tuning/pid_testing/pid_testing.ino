@@ -5,7 +5,10 @@
 const uint8_t SELF_ADDRESS = 0x08;
 
 // number of motors
-const uint8_t NMOTORS = 3;
+const uint8_t NMOTORS = 4;
+
+//number of encoder pulses per full rotation
+const uint32_t pulses_per_turn = 16*50;
 
 // i2c message buffers 
 const uint8_t RX_BUF_SIZE = 5;
@@ -48,15 +51,15 @@ int32_t r_vel_sp = 0; // +r -> CW,    -r -> CCW
 void setup() {
   Serial.begin(115200);
 
-  //13, 17
-  motor_array[0] = {2, 4, 20, 21, 3};
-  motor_array[1] = {6, 7, 19, 18, 5}; 
-  motor_array[2] = {8, 15, 16, 14, 9}; 
-  motor_array[3] = {1, 1, 1, 1, 10};  
+  motor_array[0] = {56, 57, 55, 54, 11};
+  motor_array[1] = {61, 60, 58, 59, 10};
+  motor_array[2] = {24, 25, 22, 23, 0};
+  motor_array[3] = {28, 29, 26, 27, 1}; 
+
 
   for (int k = 0; k < NMOTORS; k++) {
     motor_initialize(motor_array[k]);
-    pid[k].setParams(1, 0, 0, 255);
+    pid[k].setParams(1, 0, 0, 150);
   }
 
   Wire.begin(SELF_ADDRESS);
@@ -183,14 +186,36 @@ void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
 
 void setTarget(float t, float deltat){
 
+  //64 encoder counts per rotation
+  //We are only worried about 16 of them (when ENA is a rising edge)
+  //because that's when the interrupts are called
+
+  //Gear-ratio: 50:1
+  
   float positionChange[4] = {0.0, 0.0, 0.0, 0.0};
+
+  //There are 16*50 pulses per rotation of the output shaft
   float pulsesPerTurn = 16*50; 
-  float pulsesPerMeter = pulsesPerTurn*1.641;
+
+  //mechanum wheels have diameter of 97mm
+  //circumferance in meters = (pi*0.097) = 0.03
+  //so 1 full rotation = 0.03m of travel
+
+  //1 full rotation /0.03m = how many rotations per meter of travel
+  //(1 full rotation / 0.03m) * (encoder pulses / full rotation) = encoder pulses / m
+  float pulsesPerMeter = pulsesPerTurn*32.8;
 
   t = fmod(t,12); // time is in seconds
 
   //the current program goes 1 meter every 4 seconds
   float velocity = 0.25; // m/s
+
+  //TO DO: change this to RPM
+  
+  
+
+  //evaluating position change in encoder pulses
+  //determines how many encoder pulses are needed to reach target velocity
 
   if(t < 4){
   }
@@ -211,8 +236,8 @@ void setTarget(float t, float deltat){
   
   target[0] = (long) target_f[0];
   target[1] = (long) target_f[1];
-  target[2] = (long) -target_f[2];
-  target[3] = (long) -target_f[3];
+  target[2] = (long) target_f[2];
+  target[3] = (long) target_f[3];
 }
 
 

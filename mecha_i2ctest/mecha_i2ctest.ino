@@ -1,6 +1,6 @@
 #include <Wire.h>
 
-const uint8_t SELF_ADDR = 0x02;
+const uint8_t SELF_ADDR = 0x08;
 
 const uint8_t MSG_LEN = 4;
 
