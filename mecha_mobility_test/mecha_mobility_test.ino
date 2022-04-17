@@ -25,11 +25,11 @@ volatile int16_t r_cmd = 0;
  *  M2       M4 <- reversed
  *    (back )
  *              ~=PWM, *=INTERRUPT
- */           // IN1~, IN2, ENCA*, ENCB*              
-motor_t M1 = {3,4,20,21};
-motor_t M2 = {5,8,16,17}; 
-motor_t M3 = {6,7,14,15}; 
-motor_t M4 = {9,10,11,12};  
+ */           // EN~, IN1, IN2, ENCA*, ENCB*              
+motor_t M1 = {2,22,23,A8,A9};
+motor_t M2 = {3,24,25,A10,A11}; 
+motor_t M3 = {4,26,27,A12,A13}; 
+motor_t M4 = {5,27,28,A14,A15};  
 
 // current velocity setpoints 
 int32_t x_vel_sp = 0; // +x -> FWD,   -x -> BACK
@@ -50,10 +50,12 @@ void setup() {
 }
 
 void loop() {
-  /*
+  
   Serial.println("FWD");
   move(FWD, 150);
   delay(1000);
+
+  /*
   Serial.println("BACK");
   move(BACK, 150);
   delay(1000);
@@ -73,6 +75,7 @@ void loop() {
   move(STOP, 0);
   delay(5000);  
   */
+  
 }
 
 void read_motor_command(uint8_t *rx_buf) {
@@ -91,6 +94,7 @@ void read_motor_command(uint8_t *rx_buf) {
 }
 
 void move(move_t directive, uint8_t speed) {
+  
   switch(directive) {
     case FWD:
       motor_drive(M1, speed, CW);
@@ -142,6 +146,7 @@ void move(move_t directive, uint8_t speed) {
  *   motor_t motor   - DC motor to initialize
  */
 void motor_initialize(motor_t motor) {
+  pinMode(motor.EN, OUTPUT);
   pinMode(motor.IN1, OUTPUT);
   pinMode(motor.IN2, OUTPUT);
   pinMode(motor.ENCA, INPUT);
@@ -156,13 +161,14 @@ void motor_initialize(motor_t motor) {
  *   dir_t direction - Motor direction (CW, CCW, BRAKE)
  */
 void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
+  analogWrite(motor.EN, speed);
   switch(direction) {
     case CW: 
-      analogWrite(motor.IN1, speed);
+      digitalWrite(motor.IN1, LOW);
       digitalWrite(motor.IN2, HIGH);
       break;
     case CCW:
-      analogWrite(motor.IN1, speed);
+      digitalWrite(motor.IN1, HIGH);
       digitalWrite(motor.IN2, LOW);
       break;
     case BRAKE:

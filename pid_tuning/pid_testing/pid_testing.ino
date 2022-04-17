@@ -1,29 +1,41 @@
-#include <Wire.h>
 #include "theseus.h"
 
 // MCU I2C address
 const uint8_t SELF_ADDRESS = 0x08;
 
-// number of motors
-const uint8_t NMOTORS = 4;
+// motor pins
+const uint8_t NUM_MOTORS = 4;
+motor_t M1 = {56, 57, 55, 54, 11};
+motor_t M2 = {61, 60, 58, 59, 10};
+motor_t M3 = {24, 25, 22, 23, 0};
+motor_t M4 = {28, 29, 26, 27, 1}; 
+
+Encoder M1_encoder(M1.ENCA, M1.ENCB); 
+Encoder M2_encoder(M2.ENCA, M2.ENCB); 
+Encoder M3_encoder(M3.ENCA, M3.ENCB); 
+Encoder M4_encoder(M4.ENCA, M4.ENCB); 
+
+// pid
+double M1_in, M1_out, M1_sp;
+double M2_in, M2_out, M2_sp;
+double M3_in, M3_out, M3_sp;
+double M4_in, M4_out, M4_sp;
+PID M1_pid(&M1_in, &M1_out, &M1_sp, 1, 0, 0, DIRECT);
+PID M2_pid(&M2_in, &M2_out, &M2_sp, 1, 0, 0, DIRECT);
+PID M3_pid(&M3_in, &M3_out, &M3_sp, 1, 0, 0, DIRECT);
+PID M4_pid(&M4_in, &M4_out, &M4_sp, 1, 0, 0, DIRECT);
+
+
+// motor constants
+const uint32_t TICKS_PER_ROTATION = 16*50;
+const uint32_t PULSES_PER_CM = TICKS_PER_ROTATION * 3280;
+const uint32_t MOTOR_VELOCITY_MAX = 25; // cm/s
 
 // i2c message buffers 
 const uint8_t RX_BUF_SIZE = 5;
 const uint8_t TX_BUF_SIZE = 5;
-volatile uint8_t rx_buf[RX_BUF_SIZE];
-volatile uint8_t tx_buf[TX_BUF_SIZE];
-
-// current velocity command from CCU
-volatile int16_t x_cmd = 0;
-volatile int16_t y_cmd = 0;
-volatile int16_t r_cmd = 0;
-
-// Globals
-long prevT = 0;
-volatile int posi[] = {0,0};
-
-// PID class instances
-SimplePID pid[NMOTORS];
+static volatile uint8_t rx_buf[RX_BUF_SIZE];
+static volatile uint8_t tx_buf[TX_BUF_SIZE];
 
 /*
  * motor driver pins
@@ -35,16 +47,7 @@ SimplePID pid[NMOTORS];
  *  M2       M4 <- reversed
  *    (back )
  *              ~=PWM, *=INTERRUPT
- */           // IN1~, IN2, ENCA*, ENCB*, EN*           
-motor_t M1 = {3,4,20,21};
-motor_t M2 = {5,8,16,17}; 
-motor_t M3 = {6,7,14,15}; 
-motor_t M4 = {9,10,11,12};  
-
-// current velocity setpoints 
-int32_t x_vel_sp = 0; // +x -> FWD,   -x -> BACK
-int32_t y_vel_sp = 0; // +y -> RIGHT, -y -> LEFT
-int32_t r_vel_sp = 0; // +r -> CW,    -r -> CCW
+ */           // IN1~, IN2, ENCA*, ENCB*, EN*   
 
 void setup() {
   Serial.begin(115200);
@@ -52,156 +55,57 @@ void setup() {
   motor_initialize(M1);
   motor_initialize(M2);
   motor_initialize(M3);
-  motor_initialize(M4);  
+  motor_initialize(M4);
 
-  for(int k = 0; k < NMOTORS; k++){
-    pid[k].setParams(1,0,0,255);
-  }
+  M1_encoder.write(0);
+  M2_encoder.write(0);
+  M3_encoder.write(0);
+  M4_encoder.write(0);
 
   Wire.begin(SELF_ADDRESS);
   Wire.onRequest(event_tx_msg);
   Wire.onReceive(event_rx_msg);
-
-  attachInterrupt(digitalPinToInterrupt(M1.ENCA),readEncoder<0>,RISING);
-  attachInterrupt(digitalPinToInterrupt(M2.ENCB),readEncoder<1>,RISING);
-  attachInterrupt(digitalPinToInterrupt(M3.ENCA),readEncoder<3>,RISING);
-  attachInterrupt(digitalPinToInterrupt(M4.ENCB),readEncoder<4>,RISING);
-  
-  Serial.println("target pos");
 }
 
 void loop() {
-  /*
-  Serial.println("FWD");
-  move(FWD, 150);
-  delay(1000);
-  Serial.println("BACK");
-  move(BACK, 150);
-  delay(1000);
-  Serial.println("LEFT");
-  move(LEFT, 150);
-  delay(1000);
-  Serial.println("RIGHT");
-  move(RIGHT, 150);
-  delay(1000);
-  Serial.println("ROTATE CW");
-  move(ROT_CW, 150);
-  delay(1000);
-  Serial.println("ROTATE CCW");
-  move(ROT_CCW, 150);
-  delay(1000);
-  Serial.println("STOP");
-  move(STOP, 0);
-  delay(5000);  
-  */
-
-    // set target position
-  int target[NMOTORS];
-  target[0] = 750*sin(prevT/1e6);
-  target[1] = -750*sin(prevT/1e6);
-
-  // time difference
-  long currT = micros();
-  float deltaT = ((float) (currT - prevT))/( 1.0e6 );
-  prevT = currT;
-
-  // Read the position in an atomic block to avoid a potential misread
-  int pos[NMOTORS];
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
-    for(int k = 0; k < NMOTORS; k++){
-      pos[k] = posi[k];
-    }
-  }
   
-  // loop through the motors
-  for(int k = 0; k < NMOTORS; k++){
-    int pwr, dir;
-    // evaluate the control signal
-    pid[k].evalu(pos[k],target[k],deltaT,pwr,dir);
-    // signal the motor
-    setMotor(dir,pwr,pwm[k],in1[k],in2[k]);
-  }
+
   
-  for(int k = 0; k < NMOTORS; k++){
-    Serial.print(target[k]);
-    Serial.print(" ");
-    Serial.print(pos[k]);
-    Serial.print(" ");
-  }
-  Serial.println();
 }
 
-void read_motor_command(uint8_t *rx_buf) {
-  if(rx_buf == NULL) {
-    Serial.println("ERROR: Null pointer rx_buf(). No dir ");
-  } else {
-    bool r_sgn = bitRead(rx_buf[0],0);
-    bool y_sgn = bitRead(rx_buf[0],1);
-    bool x_sgn = bitRead(rx_buf[0],2);
-  
-    r_vel_sp = rx_buf[1] * (r_sgn ? -1 : 1);
-    y_vel_sp = rx_buf[2] * (y_sgn ? -1 : 1);
-    x_vel_sp = rx_buf[3] * (x_sgn ? -1 : 1);
-  }
+void do_pid() {
+
+  M1_in = M1_encoder.read() % TICKS_PER_ROTATION;
+  M2_in = M2_encoder.read() % TICKS_PER_ROTATION;
+  M3_in = M3_encoder.read() % TICKS_PER_ROTATION;
+  M4_in = M4_encoder.read() % TICKS_PER_ROTATION;
+
+  M1_pid.Compute();
+  M2_pid.Compute();
+  M3_pid.Compute();
+  M4_pid.Compute();
+
+  motor_drive(M1, constrain(abs(M1_out), 0, 255), (M1_out < 0 ? CCW : CW));
+  motor_drive(M2, constrain(abs(M2_out), 0, 255), (M2_out < 0 ? CCW : CW));
+  motor_drive(M3, constrain(abs(M3_out), 0, 255), (M3_out < 0 ? CCW : CW));
+  motor_drive(M4, constrain(abs(M4_out), 0, 255), (M4_out < 0 ? CCW : CW));
+
   return;
 }
 
-void move(move_t directive, uint8_t speed) {
-  switch(directive) {
-    case FWD:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case BACK:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CW);
-      break;
-    case LEFT:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CW);
-      break;
-    case RIGHT:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case ROT_CW:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CW);
-      break;
-    case ROT_CCW:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case STOP: 
-      motor_drive(M1, 0, BRAKE);
-      motor_drive(M2, 0, BRAKE);
-      motor_drive(M3, 0, BRAKE);
-      motor_drive(M4, 0, BRAKE);
-      break;
-  }
-}
+
 
 /*
  * motor_initialize(): Initializes motor GPIO pins
  *   motor_t motor   - DC motor to initialize
  */
 void motor_initialize(motor_t motor) {
+  pinMode(motor.EN, OUTPUT);
   pinMode(motor.IN1, OUTPUT);
   pinMode(motor.IN2, OUTPUT);
   pinMode(motor.ENCA, INPUT);
-  pinMode(motor.ENCB, INPUT);  
+  pinMode(motor.ENCB, INPUT);
+  pinMode(motor.EN, OUTPUT);  
   return;
 }
 
@@ -234,52 +138,18 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
   return;
 }
 
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
-  analogWrite(pwm,pwmVal);
-  if(dir == 1){
-    digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+/*
+ * read_motor_command() - Parses I2C message into command for shipbot
+ * 
+ *
+ */
+void read_motor_command(uint8_t *rx_buf) {
+  if(rx_buf == NULL) {
+    Serial.println("ERROR: Null pointer rx_buf(). No dir ");
+  } else {
+    // tbd
   }
-  else if(dir == -1){
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
-  }
-  else{
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);
-  }  
-}
-
-
-template <int j>
-void readEncoder(){
-  int b = digitalRead(encb[j]);
-  if(b > 0){
-    posi[j]++;
-  }
-  else{
-    posi[j]--;
-  }
-}
-
-void update_motors() {
-
-  pid[0].evalu[pos[0],target[0],deltaT,pwr,dir);
-  pid[1].evalu[pos[1],target[1],deltaT,pwr,dir);
-  pid[2].evalu[pos[2],target[2],deltaT,pwr,dir);
-  pid[3].evalu[pos[3],target[3],deltaT,pwr,dir);
-
-
-
-  
-  // loop through the motors
-  for(int k = 0; k < NMOTORS; k++){
-    int pwr, dir;
-    // evaluate the control signal
-    pid[k].evalu(pos[k],target[k],deltaT,pwr,dir);
-    // signal the motor
-    setMotor(dir,pwr,pwm[k],in1[k],in2[k]);
-  }
+  return;
 }
 
 /*
@@ -300,21 +170,10 @@ void event_rx_msg(int num_bytes) {
   uint8_t bytes_read = 0;
   while((Wire.available() != 0) && (bytes_read < RX_BUF_SIZE)) {
     rx_buf[bytes_read] = Wire.read();
-    //Serial.println("PRINTING RX");
-    //Serial.print(rx_buf[bytes_read]);
     bytes_read++;
   }
-  //Serial.println();
-
-  Serial.print("Read message: ");
-  for (int i = 0; i < RX_BUF_SIZE; i++){
-    Serial.print(rx_buf[i]);
-  }
-  Serial.println();
   
-  memcpy(tx_buf, rx_buf, sizeof(rx_buf[0]*RX_BUF_SIZE));
-
-  Wire.write((uint8_t *) &tx_buf, TX_BUF_SIZE);
-
+  // memcpy(tx_buf, rx_buf, sizeof(rx_buf[0]*RX_BUF_SIZE));
+  // Wire.write((uint8_t *) &tx_buf, TX_BUF_SIZE);
   return;
 }

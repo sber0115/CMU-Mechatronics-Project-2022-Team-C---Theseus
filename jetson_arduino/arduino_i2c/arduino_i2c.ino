@@ -7,6 +7,7 @@ void setup() {
   Serial.begin(9600);
   Wire.begin(0x08);                // join i2c bus with address #8
   Wire.onReceive(receiveEvent); // function that executes whenever data is received from writer
+  
   // put your setup code here, to run once:
   pinMode(LED_PIN, OUTPUT);  
 }
