@@ -24,21 +24,36 @@ const uint8_t encoder3_pinB;
 const uint8_t encoder4_pinA;
 const uint8_t encoder4_pinB;
 
+const float R = 0.09;
+const float L1 = 0.1778;
+const float L2 = 0.1778;
+
 volatile long encoder1_pos = 0;    // encoder 1
 volatile long encoder2_Pos = 0;    // encoder 2
 volatile long encoder3_pos = 0;    // encoder 3
 volatile long encoder4_pos = 0;    // encoder 4
 
+float desired_x;
+float desired_y;
+float desired_th;
+
+volatile float desired_1; // front left
+volatile float desired_2; // front right
+volatile float desired_3; // rear left
+volatile float desired_4; // rear right
+
+
+
 void velCallback(  const geometry_msgs::Twist& vel)
 {
-     demandx = vel.linear.x;
-     demandz = vel.angular.z;
-          
-     demandArmX = vel.angular.x;
-     demandArmY = vel.angular.y;
-     demandArmZ = vel.linear.z;
+     desired_x = vel.linear.x;
+     desired_y = vel.linear.y;
+     desired_th = vel.angular.z;
 
-     demandEye = vel.linear.y;
+     desired_1 = (desired_x - desired_y - (L1 + L2)*desired_th)/R;
+     desired_2 = (desired_x + desired_y + (L1 + L2)*desired_th)/R;
+     desired_3 = (desired_x + desired_y - (L1 + L2)*desired_th)/R;
+     desired_4 = (desired_x - desired_y + (L1 + L2)*desired_th)/R;
 }
 
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
