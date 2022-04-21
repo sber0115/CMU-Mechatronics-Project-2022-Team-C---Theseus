@@ -37,11 +37,11 @@ float desired_x;
 float desired_y;
 float desired_th;
 
-volatile float desired_1; // front left
-volatile float desired_2; // front right
-volatile float desired_3; // rear left
-volatile float desired_4; // rear right
 
+volatile float M1_setpoint; // front left  (M1)
+volatile float M2_setpoint; // rear left   (M2)
+volatile float M3_setpoint; // front right (M3)
+volatile float M4_setpoint; // rear right  (M4)
 
 
 void velCallback(  const geometry_msgs::Twist& vel)
@@ -50,10 +50,10 @@ void velCallback(  const geometry_msgs::Twist& vel)
      desired_y = vel.linear.y;
      desired_th = vel.angular.z;
 
-     desired_1 = (desired_x - desired_y - (L1 + L2)*desired_th)/R;
-     desired_2 = (desired_x + desired_y + (L1 + L2)*desired_th)/R;
-     desired_3 = (desired_x + desired_y - (L1 + L2)*desired_th)/R;
-     desired_4 = (desired_x - desired_y + (L1 + L2)*desired_th)/R;
+     M1_setpoint = (desired_x - desired_y - (L1 + L2)*desired_th)/R;
+     M2_setpoint = (desired_x + desired_y - (L1 + L2)*desired_th)/R;
+     M3_setpoint = (desired_x + desired_y + (L1 + L2)*desired_th)/R;
+     M4_setpoint = (desired_x - desired_y + (L1 + L2)*desired_th)/R;
 }
 
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
