@@ -11,6 +11,14 @@
     uint8_t ENCB;
   };
 
+  struct pid_params_t {
+    uint16_t KP;
+    uint16_t KI;
+    uint16_t KD;
+    uint8_t UMIN;
+    uint8_t UMAX;
+  };
+
   enum move_t {
     FWD=0,
     BACK=1,
@@ -27,14 +35,19 @@
     BRAKE=0
   };
 
-  enum msg_t {
-    TEST=0,
-    MOVE=1
+  struct directive_t {
+    uint8_t speed;
+    dir_t direction;
   };
 
   struct msg_test {
     uint8_t id;
     uint8_t data[3];
+  };
+
+    enum msg_t {
+    TEST=0,
+    MOVE=1
   };
 
   struct msg_move_t {

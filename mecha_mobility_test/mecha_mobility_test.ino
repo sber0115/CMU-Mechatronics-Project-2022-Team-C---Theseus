@@ -1,19 +1,36 @@
-#include <Wire.h>
+//#define ENCODER_OPTIMIZE_INTERRUPTS
+//#include <Encoder.h>
 #include "theseus.h"
+#include <Servo.h>
 
-// MCU I2C address
-const uint8_t SELF_ADDRESS = 0x08;
+Servo lac_v;
+Servo lac_h;
 
-// i2c message buffers 
-const uint8_t RX_BUF_SIZE = 5;
-const uint8_t TX_BUF_SIZE = 5;
-volatile uint8_t rx_buf[RX_BUF_SIZE];
-volatile uint8_t tx_buf[TX_BUF_SIZE];
+int pos_v = 0;
+int pos_h = 0;
 
-// current velocity command from CCU
-volatile int16_t x_cmd = 0;
-volatile int16_t y_cmd = 0;
-volatile int16_t r_cmd = 0;
+// motor constants
+const uint32_t TICKS_PER_ROTATION = 16*50;
+const uint32_t PULSES_PER_CM = (TICKS_PER_ROTATION * 1000) / 3047;
+
+volatile long current_time = 0;
+volatile long elapsed_time = 0; 
+volatile long previous_time = 0;
+
+//ignore
+uint32_t current_ticks = 0;
+
+//total encoder count for each motor
+volatile int current_pos1 = 0;
+volatile int current_pos2 = 0;
+volatile int current_pos3 = 0;
+volatile int current_pos4 = 0;
+
+uint32_t elapsed_ticks = 0; 
+uint32_t previous_ticks = 0;
+
+uint8_t STEPPER_1 = 10;
+uint8_t STEPPER_2 = 11;
 
 /*
  * motor driver pins
@@ -26,15 +43,44 @@ volatile int16_t r_cmd = 0;
  *    (back )
  *              ~=PWM, *=INTERRUPT
  */           // EN~, IN1, IN2, ENCA*, ENCB*              
-motor_t M1 = {2,22,23,A8,A9};
-motor_t M2 = {3,24,25,A10,A11}; 
-motor_t M3 = {4,26,27,A12,A13}; 
-motor_t M4 = {5,27,28,A14,A15};  
+motor_t M1 = {2,22,23,18,A9};
+motor_t M2 = {3,24,25,19,A11}; 
+motor_t M3 = {4,26,29,20,A13}; 
+motor_t M4 = {5,27,28,21,A15};  
 
-// current velocity setpoints 
-int32_t x_vel_sp = 0; // +x -> FWD,   -x -> BACK
-int32_t y_vel_sp = 0; // +y -> RIGHT, -y -> LEFT
-int32_t r_vel_sp = 0; // +r -> CW,    -r -> CCW
+/*
+Encoder M1_enc(M1.ENCA, M1.ENCB); 
+Encoder M2_enc(M2.ENCA, M2.ENCB);
+Encoder M3_enc(M3.ENCA, M3.ENCB);
+Encoder M4_enc(M4.ENCA, M4.ENCB);
+*/
+
+                  //  KP KI KD UMIN UMAX
+pid_params_t M1_PID = {1,0,0,0,255};
+pid_params_t M2_PID = {1,0,0,0,255};
+pid_params_t M3_PID = {1,0,0,0,255};
+pid_params_t M4_PID = {1,0,0,0,255};
+
+directive_t M1_command;
+
+volatile float M1_velocity = 0;
+volatile float M2_velocity = 0;
+volatile float M3_velocity = 0;
+volatile float M4_velocity = 0;
+
+/*To convert between radians/s and revs/m, multiply rads/s by 9.55
+ * 
+ * 
+ */
+uint32_t M1_sp = 200; // rev/m
+uint32_t M2_sp = 0;
+uint32_t M3_sp = 0;
+uint32_t M4_sp = 0;
+
+uint32_t M1_prev_error = 0;
+
+char arg1 = 'g';
+int arg2 = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -44,101 +90,97 @@ void setup() {
   motor_initialize(M3);
   motor_initialize(M4);  
 
-  Wire.begin(SELF_ADDRESS);
-  Wire.onRequest(event_tx_msg);
-  Wire.onReceive(event_rx_msg);
+  lac_v.attach(8);
+  lac_h.attach(9);
+
+  attachInterrupt(digitalPinToInterrupt(18), readEncoder1, RISING);
+  attachInterrupt(digitalPinToInterrupt(19), readEncoder2, RISING);
+  attachInterrupt(digitalPinToInterrupt(20), readEncoder3, RISING);
+  attachInterrupt(digitalPinToInterrupt(21), readEncoder4, RISING);
+  
+  //Serial.println("Input a position");
+
 }
 
 void loop() {
+
+  M1_command = do_pid(current_pos1);
   
-  Serial.println("FWD");
-  move(FWD, 150);
+  /*
+  Serial.println("M1 ticks: " + String(current_pos1));
+  Serial.println("M2 ticks: " + String(current_pos2));
+  Serial.println("M3 ticks: " + String(current_pos3));
+  Serial.println("M4 ticks: " + String(current_pos4));
+
   delay(1000);
+  */
+
+  move();
+
+  Serial.print(M1_command.speed);
+  Serial.print(" ");
+  Serial.print(M1_sp);
+  Serial.println();
 
   /*
-  Serial.println("BACK");
-  move(BACK, 150);
-  delay(1000);
-  Serial.println("LEFT");
-  move(LEFT, 150);
-  delay(1000);
-  Serial.println("RIGHT");
-  move(RIGHT, 150);
-  delay(1000);
-  Serial.println("ROTATE CW");
-  move(ROT_CW, 150);
-  delay(1000);
-  Serial.println("ROTATE CCW");
-  move(ROT_CCW, 150);
-  delay(1000);
-  Serial.println("STOP");
-  move(STOP, 0);
-  delay(5000);  
+  Serial.println("EN1 pos: " + String(M1_enc.read()));
+  Serial.println("EN2 pos: " + String(M2_enc.read()));
+  Serial.println("EN3 pos: " + String(M3_enc.read()));
+  Serial.println("EN4 pos: " + String(M4_enc.read()));
   */
-  
+
+  /*
+  while (Serial.available()==0){}
+  arg1 = Serial.read();
+  arg2 = Serial.parseInt();
+  switch(arg1) {
+    case 'w':
+      move(FWD, speed);
+      break;
+    case 's':
+      move(BACK, speed);
+      break;
+    case 'a':
+      move(LEFT, speed);
+      break;
+    case 'd':
+      move(RIGHT, speed);
+      break;
+    case 'q':
+      move(ROT_CCW, speed);
+      break;
+    case 'e':
+      move(ROT_CW, speed);
+      break;
+    case ' ':
+      move(STOP, speed);
+      break;
+    default:
+      Serial.println("Invalid Command.");  
+  }
+  */
 }
 
-void read_motor_command(uint8_t *rx_buf) {
-  if(rx_buf == NULL) {
-    Serial.println("ERROR: Null pointer rx_buf(). No dir ");
-  } else {
-    bool r_sgn = bitRead(rx_buf[0],0);
-    bool y_sgn = bitRead(rx_buf[0],1);
-    bool x_sgn = bitRead(rx_buf[0],2);
-  
-    r_vel_sp = rx_buf[1] * (r_sgn ? -1 : 1);
-    y_vel_sp = rx_buf[2] * (y_sgn ? -1 : 1);
-    x_vel_sp = rx_buf[3] * (x_sgn ? -1 : 1);
-  }
-  return;
+directive_t do_pid(double current_vel) {
+  directive_t out = {0,BRAKE};
+
+  int32_t error = M1_sp - M1_velocity;
+  int32_t integral = error * elapsed_time;
+  int32_t derivative = (error - M1_prev_error) / elapsed_time;
+
+  int32_t speed = M1_PID.KD * derivative + M1_PID.KI * integral + M1_PID.KP * error;
+  uint32_t abs_speed = abs(speed);
+  out.speed = constrain(abs_speed, 0, 255);
+  out.direction = (speed < 0 ? CCW : CW);
+
+  return out;
+
 }
 
-void move(move_t directive, uint8_t speed) {
+
+void move() {
   
-  switch(directive) {
-    case FWD:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case BACK:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CW);
-      break;
-    case LEFT:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CW);
-      break;
-    case RIGHT:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case ROT_CW:
-      motor_drive(M1, speed, CW);
-      motor_drive(M2, speed, CW);
-      motor_drive(M3, speed, CW);
-      motor_drive(M4, speed, CW);
-      break;
-    case ROT_CCW:
-      motor_drive(M1, speed, CCW);
-      motor_drive(M2, speed, CCW);
-      motor_drive(M3, speed, CCW);
-      motor_drive(M4, speed, CCW);
-      break;
-    case STOP: 
-      motor_drive(M1, 0, BRAKE);
-      motor_drive(M2, 0, BRAKE);
-      motor_drive(M3, 0, BRAKE);
-      motor_drive(M4, 0, BRAKE);
-      break;
-  }
+  motor_drive(M1, M1_command.speed, M1_command.direction);
 }
 
 /*
@@ -150,7 +192,10 @@ void motor_initialize(motor_t motor) {
   pinMode(motor.IN1, OUTPUT);
   pinMode(motor.IN2, OUTPUT);
   pinMode(motor.ENCA, INPUT);
-  pinMode(motor.ENCB, INPUT);  
+  pinMode(motor.ENCB, INPUT); 
+  /*
+  m_enc.write(0);  
+  */
   return;
 }
 
@@ -184,39 +229,53 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
   return;
 }
 
-/*
- * event_tx_msg(): Event handler when I2C message requested by master
- */
-void event_tx_msg() {
-  Wire.write((uint8_t *) &tx_buf, TX_BUF_SIZE);
-  return;
+void readEncoder1(){
+  int b = digitalRead(M1.ENCB);
+  int increment = 0;
+  if (b > 0){
+    increment = 1;
+  }
+  else{
+    increment = -1;
+  }
+  current_pos1 += increment;
+  long current_time = micros();
+  float elapsed_time = ((float)(current_time - previous_time)/1.0e6);
+  //
+  M1_velocity = (increment)/elapsed_time; //seconds / encoder ticker
+  
+  //converting secs/encoder count to rotations per minute
+  M1_velocity = ((1/M1_velocity)*60)/TICKS_PER_ROTATION;
+  
+  previous_time = current_time;
 }
 
-/*
- * event_rx_msg(): Event handler when I2C message received from master
- */
-void event_rx_msg(int num_bytes) {
-
-  Serial.println("RECEIVED I2C message\n");
-  
-  uint8_t bytes_read = 0;
-  while((Wire.available() != 0) && (bytes_read < RX_BUF_SIZE)) {
-    rx_buf[bytes_read] = Wire.read();
-    //Serial.println("PRINTING RX");
-    //Serial.print(rx_buf[bytes_read]);
-    bytes_read++;
+void readEncoder2(){
+  int b = digitalRead(M2.ENCB);
+  if (b > 0){
+    current_pos2++;
   }
-  //Serial.println();
-
-  Serial.print("Read message: ");
-  for (int i = 0; i < RX_BUF_SIZE; i++){
-    Serial.print(rx_buf[i]);
+  else{
+    current_pos2--;
   }
-  Serial.println();
-  
-  memcpy(tx_buf, rx_buf, sizeof(rx_buf[0]*RX_BUF_SIZE));
+}
 
-  Wire.write((uint8_t *) &tx_buf, TX_BUF_SIZE);
+void readEncoder3(){
+  int b = digitalRead(M3.ENCB);
+  if (b > 0){
+    current_pos3++;
+  }
+  else{
+    current_pos3--;
+  }
+}
 
-  return;
+void readEncoder4(){
+  int b = digitalRead(M4.ENCB);
+  if (b > 0){
+    current_pos4++;
+  }
+  else{
+    current_pos4--;
+  }
 }
