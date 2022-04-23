@@ -15,6 +15,7 @@
     uint16_t KP;
     uint16_t KI;
     uint16_t KD;
+    uint16_t BIAS;
     uint8_t UMIN;
     uint8_t UMAX;
   };

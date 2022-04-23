@@ -1,16 +1,17 @@
 #include "theseus.h"
 #include <Servo.h>
-#include "ros.h"
+/* #include "ros.h"
 #include "geometry_msgs/Twist.h"
 #include <ros/time.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <std_msgs/UInt16.h>
-
+*/
+/*
 ros::NodeHandle nh;
 geometry_msgs::TransformStamped t;
 tf::TransformBroadcaster broadcaster;
-
+*/
 //body velocity translation parameters
 const float R = 0.09;
 const float L1 = 0.1778;
@@ -20,6 +21,7 @@ float desired_x;
 float desired_y;
 float desired_th;
 
+const uint32_t TEN_TO_THE_6 = 1000000;
 ////
 
 Servo lac_v;
@@ -29,24 +31,19 @@ int pos_v = 0;
 int pos_h = 0;
 
 // motor constants
-const uint32_t TICKS_PER_ROTATION = 16*50;
-const uint32_t PULSES_PER_CM = (TICKS_PER_ROTATION * 1000) / 3047;
+const int32_t TICKS_PER_ROTATION = 16*50;
 
-volatile long current_time = 0;
-volatile long elapsed_time = 0; 
-volatile long previous_time = 0;
+volatile int32_t current_time = 0;
+volatile int32_t elapsed_time = 0; 
 
 //ignore
-uint32_t current_ticks = 0;
+int32_t current_ticks = 0;
 
 //total encoder count for each motor
-volatile int current_pos1 = 0;
-volatile int current_pos2 = 0;
-volatile int current_pos3 = 0;
-volatile int current_pos4 = 0;
-
-uint32_t elapsed_ticks = 0; 
-uint32_t previous_ticks = 0;
+volatile int32_t current_pos1 = 0;
+volatile int32_t current_pos2 = 0;
+volatile int32_t current_pos3 = 0;
+volatile int32_t current_pos4 = 0;
 
 uint8_t STEPPER_1 = 10;
 uint8_t STEPPER_2 = 11;
@@ -74,27 +71,27 @@ Encoder M3_enc(M3.ENCA, M3.ENCB);
 Encoder M4_enc(M4.ENCA, M4.ENCB);
 */
 
-                  //  KP KI KD UMIN UMAX
-pid_params_t M1_PID = {1,0,0,0,255};
-pid_params_t M2_PID = {1,0,0,0,255};
-pid_params_t M3_PID = {1,0,0,0,255};
-pid_params_t M4_PID = {1,0,0,0,255};
+                  //  KP KI KD BIAS UMIN UMAX
+pid_params_t M1_PID = {500,200,100,60000,0,255};
+pid_params_t M2_PID = {1,0,0,30,0,255};
+pid_params_t M3_PID = {1,0,0,30,0,255};
+pid_params_t M4_PID = {1,0,0,30,0,255};
 
 directive_t M1_command;
 
-volatile float M1_velocity = 0;
+volatile int32_t M1_velocity = 0;
 volatile float M2_velocity = 0;
 volatile float M3_velocity = 0;
 volatile float M4_velocity = 0;
 
 
 //To convert between radians/s and revs/m, multiply rads/s by 9.55
-volatile float M1_sp = 200; // rev/min
+volatile int32_t M1_sp = 100; // rev/min
 volatile float M2_sp = 0;
 volatile float M3_sp = 0;
 volatile float M4_sp = 0;
 
-
+/*
 void velCallback(  const geometry_msgs::Twist& vel)
 {
      desired_x = vel.linear.x;
@@ -108,7 +105,7 @@ void velCallback(  const geometry_msgs::Twist& vel)
 }
 
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
-
+*/
 
 uint32_t M1_prev_error = 0;
 
@@ -130,83 +127,57 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(19), readEncoder2, RISING);
   attachInterrupt(digitalPinToInterrupt(20), readEncoder3, RISING);
   attachInterrupt(digitalPinToInterrupt(21), readEncoder4, RISING);
-
+  /*
   nh.initNode();              // init ROS
   nh.subscribe(sub);          // subscribe to cmd_vel
-  
+  */
   //Serial.println("Input a position");
 
 }
 
 void loop() {
-  nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
+  // nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
 
-  M1_command = do_pid(current_pos1);
-  
-  /*
-  Serial.println("M1 ticks: " + String(current_pos1));
-  Serial.println("M2 ticks: " + String(current_pos2));
-  Serial.println("M3 ticks: " + String(current_pos3));
-  Serial.println("M4 ticks: " + String(current_pos4));
+  current_time = millis();
+  static int32_t previous_time = 0;
+  static int32_t previous_ticks = 0;
+  elapsed_time = current_time - previous_time;
+  int32_t elapsed_ticks = current_pos1 - previous_ticks;
+  // M1_command.speed = 40;
+  // M1_command.direction = CW;
 
-  delay(1000);
-  */
+  M1_velocity = (elapsed_ticks * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
 
+  M1_command = do_pid();
   move();
 
-  Serial.print(M1_command.speed);
-  Serial.print(" ");
+  previous_time = current_time;
+  previous_ticks = current_pos1;
+
+  //Serial.print("CMD:");
+  //Serial.print(M1_command.speed);
+  Serial.print(",SP:");
   Serial.print(M1_sp);
+  //Serial.print(",T:");
+  //Serial.print(elapsed_time);
+  //Serial.print(",POS:");
+  //Serial.print(elapsed_ticks);
+  Serial.print(",V:");
+  Serial.println(String(M1_velocity));
   Serial.println();
-
-  /*
-  Serial.println("EN1 pos: " + String(M1_enc.read()));
-  Serial.println("EN2 pos: " + String(M2_enc.read()));
-  Serial.println("EN3 pos: " + String(M3_enc.read()));
-  Serial.println("EN4 pos: " + String(M4_enc.read()));
-  */
-
-  /*
-  while (Serial.available()==0){}
-  arg1 = Serial.read();
-  arg2 = Serial.parseInt();
-  switch(arg1) {
-    case 'w':
-      move(FWD, speed);
-      break;
-    case 's':
-      move(BACK, speed);
-      break;
-    case 'a':
-      move(LEFT, speed);
-      break;
-    case 'd':
-      move(RIGHT, speed);
-      break;
-    case 'q':
-      move(ROT_CCW, speed);
-      break;
-    case 'e':
-      move(ROT_CW, speed);
-      break;
-    case ' ':
-      move(STOP, speed);
-      break;
-    default:
-      Serial.println("Invalid Command.");  
-  }
-  */
+  delay(100);
 }
 
-directive_t do_pid(double current_vel) {
+directive_t do_pid() {
   directive_t out = {0,BRAKE};
 
   int32_t error = M1_sp - M1_velocity;
+  static int32_t prev_error = 0;
   int32_t integral = error * elapsed_time;
-  int32_t derivative = (error - M1_prev_error) / elapsed_time;
-
-  int32_t speed = M1_PID.KD * derivative + M1_PID.KI * integral + M1_PID.KP * error;
-  uint32_t abs_speed = abs(speed);
+  int32_t derivative = (error - prev_error) / elapsed_time;
+  prev_error = error;
+  int32_t speed = M1_PID.KD * derivative + M1_PID.KI * integral + M1_PID.KP * error + M1_PID.BIAS;
+  uint32_t abs_speed = abs(speed/1000);
   out.speed = constrain(abs_speed, 0, 255);
   out.direction = (speed < 0 ? CCW : CW);
 
@@ -218,6 +189,7 @@ directive_t do_pid(double current_vel) {
 void move() {
   
   motor_drive(M1, M1_command.speed, M1_command.direction);
+  
 }
 
 /*
@@ -267,24 +239,7 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
 }
 
 void readEncoder1(){
-  int b = digitalRead(M1.ENCB);
-  int increment = 0;
-  if (b > 0){
-    increment = 1;
-  }
-  else{
-    increment = -1;
-  }
-  current_pos1 += increment;
-  long current_time = micros();
-  float elapsed_time = ((float)(current_time - previous_time)/1.0e6);
-  //
-  M1_velocity = (increment)/elapsed_time; //seconds / encoder ticker
-  
-  //converting secs/encoder count to rotations per minute
-  M1_velocity = ((1/M1_velocity)*60)/TICKS_PER_ROTATION;
-  
-  previous_time = current_time;
+  current_pos1 += (PINK & (1<<1) ? 1 : -1);
 }
 
 void readEncoder2(){
