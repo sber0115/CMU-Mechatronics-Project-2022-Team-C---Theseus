@@ -1,7 +1,26 @@
-//#define ENCODER_OPTIMIZE_INTERRUPTS
-//#include <Encoder.h>
 #include "theseus.h"
 #include <Servo.h>
+#include "ros.h"
+#include "geometry_msgs/Twist.h"
+#include <ros/time.h>
+#include <tf/tf.h>
+#include <tf/transform_broadcaster.h>
+#include <std_msgs/UInt16.h>
+
+ros::NodeHandle nh;
+geometry_msgs::TransformStamped t;
+tf::TransformBroadcaster broadcaster;
+
+//body velocity translation parameters
+const float R = 0.09;
+const float L1 = 0.1778;
+const float L2 = 0.1778;
+
+float desired_x;
+float desired_y;
+float desired_th;
+
+////
 
 Servo lac_v;
 Servo lac_h;
@@ -68,14 +87,28 @@ volatile float M2_velocity = 0;
 volatile float M3_velocity = 0;
 volatile float M4_velocity = 0;
 
-/*To convert between radians/s and revs/m, multiply rads/s by 9.55
- * 
- * 
- */
-uint32_t M1_sp = 200; // rev/m
-uint32_t M2_sp = 0;
-uint32_t M3_sp = 0;
-uint32_t M4_sp = 0;
+
+//To convert between radians/s and revs/m, multiply rads/s by 9.55
+volatile float M1_sp = 200; // rev/min
+volatile float M2_sp = 0;
+volatile float M3_sp = 0;
+volatile float M4_sp = 0;
+
+
+void velCallback(  const geometry_msgs::Twist& vel)
+{
+     desired_x = vel.linear.x;
+     desired_y = vel.linear.y;
+     desired_th = vel.angular.z;
+
+     M1_sp = 9.55*(desired_x - desired_y - (L1 + L2)*desired_th)/R;
+     M2_sp = 9.55*(desired_x + desired_y - (L1 + L2)*desired_th)/R;
+     M3_sp = 9.55*(desired_x + desired_y + (L1 + L2)*desired_th)/R;
+     M4_sp = 9.55*(desired_x - desired_y + (L1 + L2)*desired_th)/R;
+}
+
+ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
+
 
 uint32_t M1_prev_error = 0;
 
@@ -97,12 +130,16 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(19), readEncoder2, RISING);
   attachInterrupt(digitalPinToInterrupt(20), readEncoder3, RISING);
   attachInterrupt(digitalPinToInterrupt(21), readEncoder4, RISING);
+
+  nh.initNode();              // init ROS
+  nh.subscribe(sub);          // subscribe to cmd_vel
   
   //Serial.println("Input a position");
 
 }
 
 void loop() {
+  nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
 
   M1_command = do_pid(current_pos1);
   
