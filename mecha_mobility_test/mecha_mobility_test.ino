@@ -77,25 +77,28 @@ Encoder M4_enc(M4.ENCA, M4.ENCB);
 
 const int32_t KP = 80;
 const int32_t KI = 2;
-const int32_t KD = 50;
+const int32_t KD = 200;
 pid_params_t M1_PID = {KP,KI,KD,0,0,255}; //300,240,93.7
 pid_params_t M2_PID = {KP,KI,KD,0,0,255};
 pid_params_t M3_PID = {KP,KI,KD,0,0,255};
 pid_params_t M4_PID = {KP,KI,KD,0,0,255};
 
 directive_t M1_command;
+directive_t M2_command;
+directive_t M3_command;
+directive_t M4_command;
 
 volatile int32_t M1_velocity = 0;
-volatile float M2_velocity = 0;
-volatile float M3_velocity = 0;
-volatile float M4_velocity = 0;
+volatile int32_t M2_velocity = 0;
+volatile int32_t M3_velocity = 0;
+volatile int32_t M4_velocity = 0;
 
 
 //To convert between radians/s and revs/m, multiply rads/s by 9.55
 volatile int32_t M1_sp = 40; // rev/min
-volatile float M2_sp = 40;
-volatile float M3_sp = 40;
-volatile float M4_sp = 40;
+volatile int32_t M2_sp = 40;
+volatile int32_t M3_sp = 40;
+volatile int32_t M4_sp = 40;
 
 /*
 void velCallback(  const geometry_msgs::Twist& vel)
@@ -146,20 +149,35 @@ void loop() {
 
   current_time = millis();
   static int32_t previous_time = 0;
-  static int32_t previous_ticks = 0;
   elapsed_time = current_time - previous_time;
-  int32_t elapsed_ticks = current_pos1 - previous_ticks;
-  // M1_command.speed = 40;
-  // M1_command.direction = CW;
+  
+  static int32_t previous_ticks1 = 0;
+  int32_t elapsed_ticks1 = current_pos1 - previous_ticks1;
+  M1_velocity = (elapsed_ticks1 * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
+  previous_ticks1 = current_pos1;
 
-  M1_velocity = (elapsed_ticks * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
+  static int32_t previous_ticks2 = 0;
+  int32_t elapsed_ticks2 = current_pos2 - previous_ticks2;
+  M2_velocity = (elapsed_ticks2 * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
+  previous_ticks2 = current_pos2;
 
-  M1_command = do_pid();
+  static int32_t previous_ticks3 = 0;
+  int32_t elapsed_ticks3 = current_pos3 - previous_ticks3;
+  M3_velocity = (elapsed_ticks3 * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
+  previous_ticks3 = current_pos3;
+
+  static int32_t previous_ticks4 = 0;
+  int32_t elapsed_ticks4 = current_pos4 - previous_ticks4;
+  M4_velocity = (elapsed_ticks4 * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
+  previous_ticks4 = current_pos4;
+
+  do_pid();
   //lSerial.println(M1_command.speed);
+  
   move();
 
   previous_time = current_time;
-  previous_ticks = current_pos1;
+  
 
   //Serial.print("CMD:");
   //Serial.print(M1_command.speed);
@@ -169,32 +187,87 @@ void loop() {
   //Serial.print(elapsed_time);
   //Serial.print(",POS:");
   //Serial.print(elapsed_ticks);
-  Serial.print(",V:");
-  Serial.println(String(M1_velocity));
+  Serial.print(",V1:");
+  Serial.print(String(M1_velocity));
+  Serial.print(",V2:");
+  Serial.print(String(M2_velocity));
+  Serial.print(",V3:");
+  Serial.print(String(M3_velocity));
+  Serial.print(",V4:");
+  Serial.println(String(M4_velocity));
   Serial.println();
   delay(100);
   unsigned long CurrentTime = millis();
   if (CurrentTime > 6000){
     M1_sp = 80;
+    M2_sp = 80;
+    M3_sp = 80;
+    M4_sp = 80;
   }
 }
 
-int32_t sum_error = 0;
+int32_t sum_error1 = 0;
+int32_t sum_error2 = 0;
+int32_t sum_error3 = 0;
+int32_t sum_error4 = 0;
+int32_t prev_error1 = 0;
+int32_t prev_error2 = 0;
+int32_t prev_error3 = 0;
+int32_t prev_error4 = 0;
 
-directive_t do_pid() {
-  directive_t out = {0,BRAKE};
+void do_pid() {
+  // Motor 1 PID
+  directive_t out1 = {0,BRAKE};
+  int32_t error1 = M1_sp - M1_velocity;
+  sum_error1 += error1;
+  int32_t integral1 = sum_error1 * elapsed_time;
+  int32_t derivative1 = M1_PID.KD * (error1 - prev_error1) / elapsed_time;
+  prev_error1 = error1;
+  int32_t speed1 = derivative1 + M1_PID.KI * integral1 + M1_PID.KP * error1 + M1_PID.BIAS;
+  uint32_t abs_speed1 = abs(speed1/1000);
+  out1.speed = constrain(abs_speed1, 0, 255);
+  out1.direction = (speed1 < 0 ? CCW : CW);
 
-  int32_t error = M1_sp - M1_velocity;
-  static int32_t prev_error = 0;
-  sum_error += error;
-  int32_t integral = sum_error * elapsed_time;
-  int32_t derivative = (error - prev_error) / elapsed_time;
-  prev_error = error;
-  int32_t speed = M1_PID.KD * derivative + M1_PID.KI * integral + M1_PID.KP * error + M1_PID.BIAS;
-  uint32_t abs_speed = abs(speed/1000);
-  out.speed = constrain(abs_speed, 0, 255);
-  out.direction = (speed < 0 ? CCW : CW);
-  return out;
+  // Motor 2 PID
+  directive_t out2 = {0,BRAKE};
+  int32_t error2 = M2_sp - M2_velocity;
+  sum_error2 += error2;
+  int32_t integral2 = sum_error2 * elapsed_time;
+  int32_t derivative2 = (error2 - prev_error2) / elapsed_time;
+  prev_error2 = error2;
+  int32_t speed2 = M2_PID.KD * derivative2 + M2_PID.KI * integral2 + M2_PID.KP * error2 + M2_PID.BIAS;
+  uint32_t abs_speed2 = abs(speed2/1000);
+  out2.speed = constrain(abs_speed2, 0, 255);
+  out2.direction = (speed2 < 0 ? CCW : CW);
+
+  // Motor 3 PID
+  directive_t out3 = {0,BRAKE};
+  int32_t error3 = M3_sp - M3_velocity;
+  sum_error3 += error3;
+  int32_t integral3 = sum_error3 * elapsed_time;
+  int32_t derivative3 = (error3 - prev_error3) / elapsed_time;
+  prev_error3 = error3;
+  int32_t speed3 = M3_PID.KD * derivative3 + M3_PID.KI * integral3 + M3_PID.KP * error3 + M3_PID.BIAS;
+  uint32_t abs_speed3 = abs(speed3/1000);
+  out3.speed = constrain(abs_speed3, 0, 255);
+  out3.direction = (speed3 < 0 ? CCW : CW);
+
+  // Motor 4 PID
+  directive_t out4 = {0,BRAKE};
+  int32_t error4 = M4_sp - M4_velocity;
+  sum_error4 += error4;
+  int32_t integral4 = sum_error4 * elapsed_time;
+  int32_t derivative4 = (error4 - prev_error4) / elapsed_time;
+  prev_error4 = error4;
+  int32_t speed4 = M4_PID.KD * derivative4 + M4_PID.KI * integral4 + M4_PID.KP * error4 + M4_PID.BIAS;
+  uint32_t abs_speed4 = abs(speed4/1000);
+  out4.speed = constrain(abs_speed4, 0, 255);
+  out4.direction = (speed4 < 0 ? CCW : CW);
+
+  M1_command = out1;
+  M2_command = out2;
+  M3_command = out3;
+  M4_command = out4;
 
 }
 
@@ -202,6 +275,9 @@ directive_t do_pid() {
 void move() {
   
   motor_drive(M1, M1_command.speed, M1_command.direction);
+  motor_drive(M2, M2_command.speed, M2_command.direction);
+  motor_drive(M3, M3_command.speed, M3_command.direction);
+  motor_drive(M4, M4_command.speed, M4_command.direction);
   
 }
 
@@ -256,13 +332,7 @@ void readEncoder1(){
 }
 
 void readEncoder2(){
-  int b = digitalRead(M2.ENCB);
-  if (b > 0){
-    current_pos2++;
-  }
-  else{
-    current_pos2--;
-  }
+  current_pos2 += (PINK & (1<<1) ? 1 : -1);
 }
 
 void readEncoder3(){
