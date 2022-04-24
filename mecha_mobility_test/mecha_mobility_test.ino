@@ -21,6 +21,7 @@ float desired_x;
 float desired_y;
 float desired_th;
 
+
 const uint32_t TEN_TO_THE_6 = 1000000;
 ////
 
@@ -71,11 +72,16 @@ Encoder M3_enc(M3.ENCA, M3.ENCB);
 Encoder M4_enc(M4.ENCA, M4.ENCB);
 */
 
+
                   //  KP KI KD BIAS UMIN UMAX
-pid_params_t M1_PID = {500,200,100,60000,0,255};
-pid_params_t M2_PID = {1,0,0,30,0,255};
-pid_params_t M3_PID = {1,0,0,30,0,255};
-pid_params_t M4_PID = {1,0,0,30,0,255};
+
+const int32_t KP = 80;
+const int32_t KI = 2;
+const int32_t KD = 50;
+pid_params_t M1_PID = {KP,KI,KD,0,0,255}; //300,240,93.7
+pid_params_t M2_PID = {KP,KI,KD,0,0,255};
+pid_params_t M3_PID = {KP,KI,KD,0,0,255};
+pid_params_t M4_PID = {KP,KI,KD,0,0,255};
 
 directive_t M1_command;
 
@@ -86,10 +92,10 @@ volatile float M4_velocity = 0;
 
 
 //To convert between radians/s and revs/m, multiply rads/s by 9.55
-volatile int32_t M1_sp = 100; // rev/min
-volatile float M2_sp = 0;
-volatile float M3_sp = 0;
-volatile float M4_sp = 0;
+volatile int32_t M1_sp = 40; // rev/min
+volatile float M2_sp = 40;
+volatile float M3_sp = 40;
+volatile float M4_sp = 40;
 
 /*
 void velCallback(  const geometry_msgs::Twist& vel)
@@ -149,6 +155,7 @@ void loop() {
   M1_velocity = (elapsed_ticks * 60000L) / (elapsed_time * TICKS_PER_ROTATION);
 
   M1_command = do_pid();
+  //lSerial.println(M1_command.speed);
   move();
 
   previous_time = current_time;
@@ -166,21 +173,27 @@ void loop() {
   Serial.println(String(M1_velocity));
   Serial.println();
   delay(100);
+  unsigned long CurrentTime = millis();
+  if (CurrentTime > 6000){
+    M1_sp = 80;
+  }
 }
+
+int32_t sum_error = 0;
 
 directive_t do_pid() {
   directive_t out = {0,BRAKE};
 
   int32_t error = M1_sp - M1_velocity;
   static int32_t prev_error = 0;
-  int32_t integral = error * elapsed_time;
+  sum_error += error;
+  int32_t integral = sum_error * elapsed_time;
   int32_t derivative = (error - prev_error) / elapsed_time;
   prev_error = error;
   int32_t speed = M1_PID.KD * derivative + M1_PID.KI * integral + M1_PID.KP * error + M1_PID.BIAS;
   uint32_t abs_speed = abs(speed/1000);
   out.speed = constrain(abs_speed, 0, 255);
   out.direction = (speed < 0 ? CCW : CW);
-
   return out;
 
 }
