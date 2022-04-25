@@ -12,6 +12,23 @@ ros::NodeHandle nh;
 geometry_msgs::TransformStamped t;
 tf::TransformBroadcaster broadcaster;
 */
+
+/*
+ * motor driver pins
+ *
+ *    (front)
+ *  M1       M3 <- reversed
+ *
+ *
+ *  M2       M4 <- reversed
+ *    (back )
+ *              ~=PWM, *=INTERRUPT
+ */           // EN~, IN1, IN2, ENCA*, ENCB*              
+motor_t M1 = {2,22,23,18,A9};
+motor_t M2 = {3,24,25,19,A11}; 
+motor_t M3 = {4,26,29,20,A13}; 
+motor_t M4 = {5,27,28,21,A15}; 
+
 //body velocity translation parameters
 const float R = 0.09;
 const float L1 = 0.1778;
@@ -47,23 +64,7 @@ volatile int32_t current_pos3 = 0;
 volatile int32_t current_pos4 = 0;
 
 uint8_t STEPPER_1 = 10;
-uint8_t STEPPER_2 = 11;
-
-/*
- * motor driver pins
- *
- *    (front)
- *  M1       M3 <- reversed
- *
- *
- *  M2       M4 <- reversed
- *    (back )
- *              ~=PWM, *=INTERRUPT
- */           // EN~, IN1, IN2, ENCA*, ENCB*              
-motor_t M1 = {2,22,23,18,A9};
-motor_t M2 = {3,24,25,19,A11}; 
-motor_t M3 = {4,26,29,20,A13}; 
-motor_t M4 = {5,27,28,21,A15};  
+uint8_t STEPPER_2 = 11; 
 
 /*
 Encoder M1_enc(M1.ENCA, M1.ENCB); 
@@ -75,12 +76,12 @@ Encoder M4_enc(M4.ENCA, M4.ENCB);
 
                   //  KP KI KD BIAS UMIN UMAX
 
-const int32_t KP = 80;
-const int32_t KI = 2;
-const int32_t KD = 200;
-pid_params_t M1_PID = {KP,KI,KD,0,0,255}; //300,240,93.7
+const int32_t KP = 800;
+const int32_t KI = 20;
+const int32_t KD = 2000;
+pid_params_t M1_PID = {KP,KI,KD,0,0,255}; 
 pid_params_t M2_PID = {KP,KI,KD,0,0,255};
-pid_params_t M3_PID = {KP,KI,KD,0,0,255};
+pid_params_t M3_PID = {KP,KI+8,KD,0,0,255};
 pid_params_t M4_PID = {KP,KI,KD,0,0,255};
 
 directive_t M1_command;
@@ -132,10 +133,10 @@ void setup() {
   lac_v.attach(8);
   lac_h.attach(9);
 
-  attachInterrupt(digitalPinToInterrupt(18), readEncoder1, RISING);
-  attachInterrupt(digitalPinToInterrupt(19), readEncoder2, RISING);
-  attachInterrupt(digitalPinToInterrupt(20), readEncoder3, RISING);
-  attachInterrupt(digitalPinToInterrupt(21), readEncoder4, RISING);
+  attachInterrupt(digitalPinToInterrupt(M1.ENCA), readEncoder1, RISING);
+  attachInterrupt(digitalPinToInterrupt(M2.ENCA), readEncoder2, RISING);
+  attachInterrupt(digitalPinToInterrupt(M3.ENCA), readEncoder3, RISING);
+  attachInterrupt(digitalPinToInterrupt(M4.ENCA), readEncoder4, RISING);
   /*
   nh.initNode();              // init ROS
   nh.subscribe(sub);          // subscribe to cmd_vel
@@ -174,7 +175,7 @@ void loop() {
   do_pid();
   //lSerial.println(M1_command.speed);
   
-  move();
+   move();
 
   previous_time = current_time;
   
@@ -199,10 +200,10 @@ void loop() {
   delay(100);
   unsigned long CurrentTime = millis();
   if (CurrentTime > 6000){
-    M1_sp = 80;
-    M2_sp = 80;
-    M3_sp = 80;
-    M4_sp = 80;
+    M1_sp = -80;
+    M2_sp = -80;
+    M3_sp = -80;
+    M4_sp = -80;
   }
 }
 
@@ -224,7 +225,7 @@ void do_pid() {
   int32_t derivative1 = M1_PID.KD * (error1 - prev_error1) / elapsed_time;
   prev_error1 = error1;
   int32_t speed1 = derivative1 + M1_PID.KI * integral1 + M1_PID.KP * error1 + M1_PID.BIAS;
-  uint32_t abs_speed1 = abs(speed1/1000);
+  uint32_t abs_speed1 = abs(speed1/10000);
   out1.speed = constrain(abs_speed1, 0, 255);
   out1.direction = (speed1 < 0 ? CCW : CW);
 
@@ -236,7 +237,7 @@ void do_pid() {
   int32_t derivative2 = (error2 - prev_error2) / elapsed_time;
   prev_error2 = error2;
   int32_t speed2 = M2_PID.KD * derivative2 + M2_PID.KI * integral2 + M2_PID.KP * error2 + M2_PID.BIAS;
-  uint32_t abs_speed2 = abs(speed2/1000);
+  uint32_t abs_speed2 = abs(speed2/10000);
   out2.speed = constrain(abs_speed2, 0, 255);
   out2.direction = (speed2 < 0 ? CCW : CW);
 
@@ -248,7 +249,7 @@ void do_pid() {
   int32_t derivative3 = (error3 - prev_error3) / elapsed_time;
   prev_error3 = error3;
   int32_t speed3 = M3_PID.KD * derivative3 + M3_PID.KI * integral3 + M3_PID.KP * error3 + M3_PID.BIAS;
-  uint32_t abs_speed3 = abs(speed3/1000);
+  uint32_t abs_speed3 = abs(speed3/10000);
   out3.speed = constrain(abs_speed3, 0, 255);
   out3.direction = (speed3 < 0 ? CCW : CW);
 
@@ -260,7 +261,7 @@ void do_pid() {
   int32_t derivative4 = (error4 - prev_error4) / elapsed_time;
   prev_error4 = error4;
   int32_t speed4 = M4_PID.KD * derivative4 + M4_PID.KI * integral4 + M4_PID.KP * error4 + M4_PID.BIAS;
-  uint32_t abs_speed4 = abs(speed4/1000);
+  uint32_t abs_speed4 = abs(speed4/10000);
   out4.speed = constrain(abs_speed4, 0, 255);
   out4.direction = (speed4 < 0 ? CCW : CW);
 
@@ -332,25 +333,13 @@ void readEncoder1(){
 }
 
 void readEncoder2(){
-  current_pos2 += (PINK & (1<<1) ? 1 : -1);
+  current_pos2 += (PINK & (1<<3) ? 1 : -1);
 }
 
 void readEncoder3(){
-  int b = digitalRead(M3.ENCB);
-  if (b > 0){
-    current_pos3++;
-  }
-  else{
-    current_pos3--;
-  }
+  current_pos3 += (PINK & (1<<5) ? 1 : -1);
 }
 
 void readEncoder4(){
-  int b = digitalRead(M4.ENCB);
-  if (b > 0){
-    current_pos4++;
-  }
-  else{
-    current_pos4--;
-  }
+  current_pos4 += (PINK & (1<<7) ? 1 : -1);
 }
