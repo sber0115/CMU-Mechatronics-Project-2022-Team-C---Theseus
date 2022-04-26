@@ -13,7 +13,7 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
         upper_size = 8000
         lower_size = 1000
     else:
-        sensitivity = 20
+        sensitivity = 15
         lower_hsv = np.array([0, 0, 255-sensitivity])
         higher_hsv = np.array([255, sensitivity, 255])
         upper = 12/10+0.2
@@ -37,7 +37,6 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
         rect = cv2.minAreaRect(c)
         (x,y),(w,h), a = rect
         if (lower < w/(h+0.0001) < upper or lower < h/(w+0.0001) < upper) and upper_size>w*h>lower_size: # filter out incorrect rectangle
-            pre_angle = angle
             box = cv2.boxPoints(rect)
             box = np.int0(box) #turn into ints
             x_rec = round(np.int0(x))
@@ -45,8 +44,9 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
             cv2.drawContours(frame, [box], 0, (0,0,255), 4)
             cv2.rectangle(frame, (x_rec-5, y_rec-5), (x_rec+5, y_rec+5), (0,128,255), -1) # draws circle center
             angle = round(a, 2)
-            if abs(angle-pre_angle) > 15 and angle == 270:
+            if abs(angle-pre_angle) > 45 and angle == 270:
                 angle = pre_angle
+            pre_angle = angle
     
     #cv2.imshow('Circular Valve', frame)
     # cv2.imshow('white elements', hsv_s_gray)
