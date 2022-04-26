@@ -76,9 +76,9 @@ Encoder M4_enc(M4.ENCA, M4.ENCB);
 
                   //  KP KI KD BIAS UMIN UMAX
 
-const int32_t KP = 800;
-const int32_t KI = 20;
-const int32_t KD = 2000;
+const int32_t KP = 800; //800
+const int32_t KI = 20; //20
+const int32_t KD = 2500; //2500
 pid_params_t M1_PID = {KP,KI,KD,0,0,255}; 
 pid_params_t M2_PID = {KP,KI,KD,0,0,255};
 pid_params_t M3_PID = {KP,KI+8,KD,0,0,255};
@@ -200,10 +200,10 @@ void loop() {
   delay(100);
   unsigned long CurrentTime = millis();
   if (CurrentTime > 6000){
-    M1_sp = -80;
-    M2_sp = -80;
-    M3_sp = -80;
-    M4_sp = -80;
+    M1_sp = 80;
+    M2_sp = 80;
+    M3_sp = 80;
+    M4_sp = 80;
   }
 }
 
