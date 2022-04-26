@@ -13,12 +13,12 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
         upper_size = 8000
         lower_size = 1000
     else:
-        sensitivity = 50
+        sensitivity = 20
         lower_hsv = np.array([0, 0, 255-sensitivity])
         higher_hsv = np.array([255, sensitivity, 255])
-        upper = 10/7+0.1
-        lower = 10/7-0.1
-        upper_size = 9000
+        upper = 12/10+0.2
+        lower = 12/10-0.2
+        upper_size = 7000
         lower_size = 1000
 
     # finds blue regions and extract eblue region dges
@@ -32,10 +32,12 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
     x_rec = 0
     y_rec = 0
     angle = 0
+    pre_angle = 0
     for c in cnts:
         rect = cv2.minAreaRect(c)
         (x,y),(w,h), a = rect
         if (lower < w/(h+0.0001) < upper or lower < h/(w+0.0001) < upper) and upper_size>w*h>lower_size: # filter out incorrect rectangle
+            pre_angle = angle
             box = cv2.boxPoints(rect)
             box = np.int0(box) #turn into ints
             x_rec = round(np.int0(x))
@@ -43,14 +45,11 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
             cv2.drawContours(frame, [box], 0, (0,0,255), 4)
             cv2.rectangle(frame, (x_rec-5, y_rec-5), (x_rec+5, y_rec+5), (0,128,255), -1) # draws circle center
             angle = round(a, 2)
-            # if h<w:
-            #     ori = 'horizontal'
-            # else:
-            #     ori = 'vertical'
-            # print('Orientation:', ori)
+            if abs(angle-pre_angle) > 15 and angle == 270:
+                angle = pre_angle
     
     #cv2.imshow('Circular Valve', frame)
-    #cv2.imshow('blue elements', hsv_s_gray)
+    # cv2.imshow('white elements', hsv_s_gray)
 
     return x_rec, y_rec, angle
 
@@ -187,7 +186,7 @@ def depthFinder(white, area, pix_area, coef, pow):
 
 
 def main():
-    target = 'small valve'
+    target = 'large valve'
 
     cap = cv2.VideoCapture(1)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
