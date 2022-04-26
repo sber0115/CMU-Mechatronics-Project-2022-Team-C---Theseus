@@ -1,3 +1,1 @@
-docker run -it --net=host --env="DISPLAY" --volume="$HOME/.Xauthority:/root/.Xauthority:rw" --device=/dev/ttyUSB0 --device=/dev/ttyACM0 rosserial_ydlidar_arduino bash
-
-docker run -it --net=host --env="DISPLAY" --volume="$HOME/.Xauthority:/root/.Xauthority:rw" --device=/dev/ttyACM0 --volume="/home/theseus/shipbot_ws:/shipbot_ws":rw ready_to_go bash
+docker run -it --net=host --env="DISPLAY" --privileged --volume="$HOME/.Xauthority:/root/.Xauthority:rw" --device=/dev/ttyACM0 --device=/dev/ttyUSB0 --device=/dev/ttyUSB1 --device=/dev/ttyUSB2 --volume="/home/theseus/shipbot_ws:/shipbot_ws":rw --volume="/home/theseus/rosserial_ws:/rosserial_ws" shipbot_dependencies bash
