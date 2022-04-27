@@ -130,7 +130,8 @@ void setup() {
   
   //Serial.println("Input a position");
 
-
+  lac_v.write(30);
+  lac_h.write(30);
 
 }
 
