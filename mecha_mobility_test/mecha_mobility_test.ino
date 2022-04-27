@@ -1,11 +1,19 @@
 #include "theseus.h"
 #include <Servo.h>
+#include <Stepper.h>
 #include "ros.h"
 #include "geometry_msgs/Twist.h"
 #include <ros/time.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <std_msgs/UInt16.h>
+#include <std_msgs/UInt32.h>
+
+const uint32_t STEPS = 1000;
+uint32_t curr_step = 0;
+uint32_t input_angle =180;
+
+Stepper stepper(STEPS,A0,A1);
 
 ros::NodeHandle nh;
 geometry_msgs::TransformStamped t;
@@ -61,14 +69,15 @@ volatile int32_t current_pos4 = 0;
 
 
                   //  KP KI KD BIAS UMIN UMAX
-
 const int32_t KP = 800; //800
 const int32_t KI = 20; //20
 const int32_t KD = 2500; //2500
-pid_params_t M1_PID = {KP,KI,KD,0,0,255}; 
-pid_params_t M2_PID = {KP,KI,KD,0,0,255};
-pid_params_t M3_PID = {KP,KI+8,KD,0,0,255};
-pid_params_t M4_PID = {KP,KI,KD,0,0,255};
+const int32_t BIAS = 100000L;
+
+pid_params_t M1_PID = {KP+1000,KI,KD-150,BIAS,0,255}; 
+pid_params_t M2_PID = {KP,KI,KD,BIAS,0,255};
+pid_params_t M3_PID = {KP,KI+8,KD,BIAS,0,255};
+pid_params_t M4_PID = {KP,KI,KD,BIAS,0,255};
 
 directive_t M1_command;
 directive_t M2_command;
@@ -89,11 +98,14 @@ volatile int32_t M4_sp = 0;
 
 void velCallback(  const geometry_msgs::Twist& vel)
 {
-     velocity_transform(vel.linear.x, vel.linear.y, vel.linear.z);
+  velocity_transform(vel.linear.x, vel.linear.y, vel.angular.z);
 }
 
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
 
+void stepperCallback(const std_msgs::UInt32 msg){
+  input_angle = msg.data;
+}
 
 void setup() {
   Serial.begin(115200);
@@ -105,6 +117,8 @@ void setup() {
 
   lac_v.attach(8);
   lac_h.attach(9);
+
+  stepper.setSpeed(50);
 
   attachInterrupt(digitalPinToInterrupt(M1.ENCA), read_enc1, RISING);
   attachInterrupt(digitalPinToInterrupt(M2.ENCA), read_enc2, RISING);
@@ -123,7 +137,14 @@ void setup() {
 void loop() {
   nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
 
-  // velocity_transform(0.0, 0.0, 0.0);
+  // angle per step
+  int32_t input_step = map(input_angle,0,360,0,200);
+
+  // move to the target angle
+  stepper.step((input_step - curr_step)*4);
+
+  // save the new current angle
+  curr_step = input_step;
 
   current_time = millis();
   static int32_t previous_time = 0;
