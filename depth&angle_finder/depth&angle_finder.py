@@ -6,10 +6,13 @@ import numpy as np
 def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
     # creates the range of green
     if color == 'green':
-        lower_hsv = np.array([30, 52, 72])
+        lower_hsv = np.array([30, 52, 72]) # [30, 52, 72]
         higher_hsv = np.array([80, 255, 255])
-        upper = 2.5
-        lower = 2.1
+        # sensitivity = 15
+        # lower_hsv = np.array([0, 0, 255-sensitivity])
+        # higher_hsv = np.array([255, sensitivity, 255])
+        upper = 11/5+5
+        lower = 11/5-0.2
         upper_size = 8000
         lower_size = 1000
     else:
@@ -49,7 +52,7 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
             pre_angle = angle
     
     #cv2.imshow('Circular Valve', frame)
-    # cv2.imshow('white elements', hsv_s_gray)
+    cv2.imshow('white elements', hsv_s_gray)
 
     return x_rec, y_rec, angle
 
@@ -112,7 +115,7 @@ def leverRect(coef, pow, W, L, frame, type):
     if type == 'lever':
         lower_color = np.array([110,20,70])
         higher_color = np.array([130, 255, 255])
-        lower_size = 8000
+        lower_size = 1000
         upper_size = 100000
     else:
         lower_color = np.array([12, 100, 90])
@@ -188,7 +191,7 @@ def depthFinder(white, area, pix_area, coef, pow):
 def main():
     target = 'large valve'
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
 
     while(True):
