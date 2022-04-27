@@ -6,21 +6,18 @@ import numpy as np
 def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
     # creates the range of green
     if color == 'green':
-        lower_hsv = np.array([30, 52, 72]) # [30, 52, 72]
-        higher_hsv = np.array([80, 255, 255])
-        # sensitivity = 15
-        # lower_hsv = np.array([0, 0, 255-sensitivity])
-        # higher_hsv = np.array([255, sensitivity, 255])
+        lower_hsv = np.array([30, 52, 50]) # [30, 52, 72]
+        higher_hsv = np.array([75, 255, 255])
         upper = 11/5+5
         lower = 11/5-0.2
         upper_size = 8000
         lower_size = 1000
     else:
-        sensitivity = 15
+        sensitivity = 30
         lower_hsv = np.array([0, 0, 255-sensitivity])
         higher_hsv = np.array([255, sensitivity, 255])
-        upper = 12/10+0.2
-        lower = 12/10-0.2
+        upper = 12/7+0.2
+        lower = 12/7-0.2
         upper_size = 7000
         lower_size = 1000
 
@@ -70,7 +67,7 @@ def valvesFinder(coef, pow, radius, frame, type):
     x_angle, y_angle, angle = valvesAngleFinder(frame_gau_blur, hsv, frame, color)
 
     # creates the range of blue
-    lower_blue = np.array([110,20,90])
+    lower_blue = np.array([110,150,80])
     higher_blue = np.array([130, 255, 255])
     #lower_blue = np.array([110, 20, 90])
     #higher_blue = np.array([130, 148, 190])
@@ -107,22 +104,22 @@ def valvesFinder(coef, pow, radius, frame, type):
         depthFinder(blue_range, np.pi*radius**2, np.pi*r**2, coef, pow)
         
     cv2.imshow('Circular Valve', frame)
-    #cv2.imshow('blue elements', blue_s_gray)q
+    #cv2.imshow('blue elements', blue_s_gray)
 
 
 def leverRect(coef, pow, W, L, frame, type):
     # creates the range of color
     if type == 'lever':
-        lower_color = np.array([110,20,70])
+        lower_color = np.array([100,150,80]) # 110,20,90
         higher_color = np.array([130, 255, 255])
-        lower_size = 1000
+        lower_size = 3000
         upper_size = 100000
     else:
-        lower_color = np.array([12, 100, 90])
+        lower_color = np.array([1, 50, 100])
         higher_color = np.array([20, 255, 255])
-        lower_size = 1000
+        lower_size = 1300
         if type == 'small switch':
-            upper_size = 100000
+            upper_size = 8000
         else:
             upper_size = 100000
 
@@ -138,18 +135,17 @@ def leverRect(coef, pow, W, L, frame, type):
     _, color_s_gray = cv2.threshold(color_s_gray, 8, 255, cv2.THRESH_BINARY)
     cnts = cv2.findContours(color_s_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2]  # Use index [-2] to be compatible to OpenCV 3 and 4
 
-    upper = L/W + 0.2
-    lower = L/W - 0.2
+    upper = L/W + 0.1
+    lower = L/W - 0.1
 
     for c in cnts:
         rect = cv2.minAreaRect(c)
+        x,y,w,h = cv2.boundingRect(c)
         (x,y),(w,h), a = rect
         if (lower < w/(h+0.0001) < upper or lower < h/(w+0.0001) < upper) and lower_size<w*h<upper_size: # filter out incorrect rectangle
             box = cv2.boxPoints(rect)
-            box = np.int0(box) #turn into ints
+            box = np.int0(box)
 
-            #depthFinder(color_range, W*L, w*h, coef, pow)
-            angle = round(a, 2)
             x = round(x, 2)
             y = round(y, 2)
             if h<w:
@@ -157,23 +153,12 @@ def leverRect(coef, pow, W, L, frame, type):
             else:
                 ori = 'vertical'
 
-            if not type == 'lever':
-                if a<5:
-                    continue
-                elif 90-a > 5:
-                    continue
-                elif ori == 'horizontal':
-                    continue
-                else:
-                    cv2.drawContours(frame, [box], 0, (0,255,0),4)
-                    print("Center: ({}, {})".format(x, y))
-            else:
-                cv2.drawContours(frame, [box], 0, (0,255,0),4)
-                x = np.int0(x)
-                y = np.int0(y)
-                cv2.rectangle(frame, (x-5, y-5), (x+5, y+5), (0,128,255), -1) # draws circle center
-                print('Orientation:', ori)
-                print("Center: ({}, {})".format(x, y))
+            cv2.drawContours(frame, [box], 0, (0,255,0),4)
+            x = np.int0(x)
+            y = np.int0(y)
+            cv2.rectangle(frame, (x-5, y-5), (x+5, y+5), (0,128,255), -1) # draws rectangle center
+            print('Orientation:', ori)
+            print("Center: ({}, {})".format(x, y))
 
     cv2.imshow('Lever', frame)
     cv2.imshow('blue elements', color_s_gray)
@@ -189,26 +174,26 @@ def depthFinder(white, area, pix_area, coef, pow):
 
 
 def main():
-    target = 'small switch'
+    target = 'large valve'
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
 
     while(True):
         _, frame = cap.read()
 
         # adaptive histogram flattening
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        h, s, v = cv2.split(hsv)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))    # flatten value
-        v_cor = clahe.apply(v)
-        hsv = cv2.merge((h, s, v_cor))
-        frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-
-        # norm = np.zeros(frame.shape)
-        # frame = cv2.normalize(frame, norm, 0, 255, cv2.NORM_MINMAX)
         # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         # h, s, v = cv2.split(hsv)
+        # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))    # flatten value
+        # v_cor = clahe.apply(v)
+        # hsv = cv2.merge((h, s, v_cor))
+        # frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+        norm = np.zeros(frame.shape)
+        frame = cv2.normalize(frame, norm, 0, 255, cv2.NORM_MINMAX)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv)
 
         # plt.hist(v_cor.ravel(), 256, [0, 256])
         # plt.show()
@@ -242,8 +227,8 @@ def main():
         elif target == "large switch":
             coef = 1934.7
             pow = -0.548
-            W = 0.8
-            L = 3.2
+            W = 1
+            L = 3.9
             leverRect(coef, pow, W, L, frame, target)
         else:
             print("!!!Wrong Target!!!")
