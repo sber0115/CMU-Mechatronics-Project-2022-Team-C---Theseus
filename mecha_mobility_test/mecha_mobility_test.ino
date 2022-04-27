@@ -24,8 +24,8 @@ tf::TransformBroadcaster broadcaster;
  *    (back )
  *              ~=PWM, *=INTERRUPT
  */           // EN~, IN1, IN2, ENCA*, ENCB*              
-motor_t M1 = {2,22,23,18,A9};
-motor_t M2 = {3,24,25,19,A11}; 
+motor_t M1 = {3,22,23,18,A9};
+motor_t M2 = {2,24,25,19,A11}; 
 motor_t M3 = {4,26,29,20,A13}; 
 motor_t M4 = {5,27,28,21,A15}; 
 
@@ -175,7 +175,7 @@ void loop() {
   do_pid();
   //lSerial.println(M1_command.speed);
   
-   move();
+  //move();
 
   previous_time = current_time;
   
