@@ -189,7 +189,7 @@ def depthFinder(white, area, pix_area, coef, pow):
 
 
 def main():
-    target = 'large valve'
+    target = 'small switch'
 
     cap = cv2.VideoCapture(0)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
