@@ -1,17 +1,16 @@
 #include "theseus.h"
 #include <Servo.h>
-/* #include "ros.h"
+#include "ros.h"
 #include "geometry_msgs/Twist.h"
 #include <ros/time.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <std_msgs/UInt16.h>
-*/
-/*
+
 ros::NodeHandle nh;
 geometry_msgs::TransformStamped t;
 tf::TransformBroadcaster broadcaster;
-*/
+
 
 /*
  * motor driver pins
@@ -24,22 +23,19 @@ tf::TransformBroadcaster broadcaster;
  *    (back )
  *              ~=PWM, *=INTERRUPT
  */           // EN~, IN1, IN2, ENCA*, ENCB*              
-motor_t M1 = {3,22,23,18,A9};
-motor_t M2 = {2,24,25,19,A11}; 
-motor_t M3 = {4,26,29,20,A13}; 
-motor_t M4 = {5,27,28,21,A15}; 
+motor_t M1 = {2,22,23,18,A9};
+motor_t M2 = {3,24,25,19,A11}; 
+motor_t M3 = {4,28,29,20,A13}; 
+motor_t M4 = {5,26,27,21,A15}; 
 
 //body velocity translation parameters
-const float R = 0.09;
-const float L1 = 0.1778;
-const float L2 = 0.1778;
+const float R = 0.0485;
+const float L1 = 0.127;
+const float L2 = 0.138;
 
 float desired_x;
 float desired_y;
 float desired_th;
-
-
-const uint32_t TEN_TO_THE_6 = 1000000;
 ////
 
 Servo lac_v;
@@ -62,16 +58,6 @@ volatile int32_t current_pos1 = 0;
 volatile int32_t current_pos2 = 0;
 volatile int32_t current_pos3 = 0;
 volatile int32_t current_pos4 = 0;
-
-uint8_t STEPPER_1 = 10;
-uint8_t STEPPER_2 = 11; 
-
-/*
-Encoder M1_enc(M1.ENCA, M1.ENCB); 
-Encoder M2_enc(M2.ENCA, M2.ENCB);
-Encoder M3_enc(M3.ENCA, M3.ENCB);
-Encoder M4_enc(M4.ENCA, M4.ENCB);
-*/
 
 
                   //  KP KI KD BIAS UMIN UMAX
@@ -96,31 +82,18 @@ volatile int32_t M4_velocity = 0;
 
 
 //To convert between radians/s and revs/m, multiply rads/s by 9.55
-volatile int32_t M1_sp = 40; // rev/min
-volatile int32_t M2_sp = 40;
-volatile int32_t M3_sp = 40;
-volatile int32_t M4_sp = 40;
+volatile int32_t M1_sp = 0; // rev/min
+volatile int32_t M2_sp = 0;
+volatile int32_t M3_sp = 0;
+volatile int32_t M4_sp = 0;
 
-/*
 void velCallback(  const geometry_msgs::Twist& vel)
 {
-     desired_x = vel.linear.x;
-     desired_y = vel.linear.y;
-     desired_th = vel.angular.z;
-
-     M1_sp = 9.55*(desired_x - desired_y - (L1 + L2)*desired_th)/R;
-     M2_sp = 9.55*(desired_x + desired_y - (L1 + L2)*desired_th)/R;
-     M3_sp = 9.55*(desired_x + desired_y + (L1 + L2)*desired_th)/R;
-     M4_sp = 9.55*(desired_x - desired_y + (L1 + L2)*desired_th)/R;
+     velocity_transform(vel.linear.x, vel.linear.y, vel.linear.z);
 }
 
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
-*/
 
-uint32_t M1_prev_error = 0;
-
-char arg1 = 'g';
-int arg2 = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -133,20 +106,24 @@ void setup() {
   lac_v.attach(8);
   lac_h.attach(9);
 
-  attachInterrupt(digitalPinToInterrupt(M1.ENCA), readEncoder1, RISING);
-  attachInterrupt(digitalPinToInterrupt(M2.ENCA), readEncoder2, RISING);
-  attachInterrupt(digitalPinToInterrupt(M3.ENCA), readEncoder3, RISING);
-  attachInterrupt(digitalPinToInterrupt(M4.ENCA), readEncoder4, RISING);
-  /*
+  attachInterrupt(digitalPinToInterrupt(M1.ENCA), read_enc1, RISING);
+  attachInterrupt(digitalPinToInterrupt(M2.ENCA), read_enc2, RISING);
+  attachInterrupt(digitalPinToInterrupt(M3.ENCA), read_enc3, RISING);
+  attachInterrupt(digitalPinToInterrupt(M4.ENCA), read_enc4, RISING);
+  
   nh.initNode();              // init ROS
   nh.subscribe(sub);          // subscribe to cmd_vel
-  */
+  
   //Serial.println("Input a position");
+
+
 
 }
 
 void loop() {
-  // nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
+  nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
+
+  // velocity_transform(0.0, 0.0, 0.0);
 
   current_time = millis();
   static int32_t previous_time = 0;
@@ -175,19 +152,26 @@ void loop() {
   do_pid();
   //lSerial.println(M1_command.speed);
   
-  //move();
+  move();
 
   previous_time = current_time;
   
 
   //Serial.print("CMD:");
   //Serial.print(M1_command.speed);
-  Serial.print(",SP:");
+  Serial.print("SP1:");
   Serial.print(M1_sp);
+  Serial.print(",SP2:");
+  Serial.print(M2_sp);
+  Serial.print(",SP3:");
+  Serial.print(M3_sp);
+  Serial.print(",SP4:");
+  Serial.print(M4_sp);  
   //Serial.print(",T:");
   //Serial.print(elapsed_time);
   //Serial.print(",POS:");
   //Serial.print(elapsed_ticks);
+  
   Serial.print(",V1:");
   Serial.print(String(M1_velocity));
   Serial.print(",V2:");
@@ -196,16 +180,35 @@ void loop() {
   Serial.print(String(M3_velocity));
   Serial.print(",V4:");
   Serial.println(String(M4_velocity));
-  Serial.println();
+  /*
+  Serial.print(",CMD1:");
+  Serial.print(String(M1_command.speed));
+  Serial.print(",CMD2:");
+  Serial.print(String(M2_command.speed));
+  Serial.print(",CMD3:");
+  Serial.print(String(M3_command.speed));
+  Serial.print(",CMD4:");
+  Serial.println(String(M4_command.speed));*/
   delay(100);
+  
+  /*
   unsigned long CurrentTime = millis();
   if (CurrentTime > 6000){
     M1_sp = 80;
     M2_sp = 80;
     M3_sp = 80;
     M4_sp = 80;
-  }
+  } */
 }
+
+void velocity_transform(float x, float y, float theta) {
+  M1_sp = (int32_t) 9.55*(x - y - (L1 + L2)*theta)/R;
+  M2_sp = (int32_t) 9.55*(x + y - (L1 + L2)*theta)/R;
+  M3_sp = (int32_t) 9.55*(x + y + (L1 + L2)*theta)/R;
+  M4_sp = (int32_t) 9.55*(x - y + (L1 + L2)*theta)/R;
+}
+
+
 
 int32_t sum_error1 = 0;
 int32_t sum_error2 = 0;
@@ -227,7 +230,7 @@ void do_pid() {
   int32_t speed1 = derivative1 + M1_PID.KI * integral1 + M1_PID.KP * error1 + M1_PID.BIAS;
   uint32_t abs_speed1 = abs(speed1/10000);
   out1.speed = constrain(abs_speed1, 0, 255);
-  out1.direction = (speed1 < 0 ? CCW : CW);
+  out1.direction = ((speed1 < 0) ? CCW : CW);
 
   // Motor 2 PID
   directive_t out2 = {0,BRAKE};
@@ -239,7 +242,7 @@ void do_pid() {
   int32_t speed2 = M2_PID.KD * derivative2 + M2_PID.KI * integral2 + M2_PID.KP * error2 + M2_PID.BIAS;
   uint32_t abs_speed2 = abs(speed2/10000);
   out2.speed = constrain(abs_speed2, 0, 255);
-  out2.direction = (speed2 < 0 ? CCW : CW);
+  out2.direction = ((speed2 < 0) ? CCW : CW);
 
   // Motor 3 PID
   directive_t out3 = {0,BRAKE};
@@ -251,7 +254,7 @@ void do_pid() {
   int32_t speed3 = M3_PID.KD * derivative3 + M3_PID.KI * integral3 + M3_PID.KP * error3 + M3_PID.BIAS;
   uint32_t abs_speed3 = abs(speed3/10000);
   out3.speed = constrain(abs_speed3, 0, 255);
-  out3.direction = (speed3 < 0 ? CCW : CW);
+  out3.direction = ((speed3 < 0) ? CCW : CW);
 
   // Motor 4 PID
   directive_t out4 = {0,BRAKE};
@@ -263,23 +266,13 @@ void do_pid() {
   int32_t speed4 = M4_PID.KD * derivative4 + M4_PID.KI * integral4 + M4_PID.KP * error4 + M4_PID.BIAS;
   uint32_t abs_speed4 = abs(speed4/10000);
   out4.speed = constrain(abs_speed4, 0, 255);
-  out4.direction = (speed4 < 0 ? CCW : CW);
+  out4.direction = ((speed4 < 0) ? CCW : CW);
 
   M1_command = out1;
   M2_command = out2;
   M3_command = out3;
   M4_command = out4;
 
-}
-
-
-void move() {
-  
-  motor_drive(M1, M1_command.speed, M1_command.direction);
-  motor_drive(M2, M2_command.speed, M2_command.direction);
-  motor_drive(M3, M3_command.speed, M3_command.direction);
-  motor_drive(M4, M4_command.speed, M4_command.direction);
-  
 }
 
 /*
@@ -292,10 +285,14 @@ void motor_initialize(motor_t motor) {
   pinMode(motor.IN2, OUTPUT);
   pinMode(motor.ENCA, INPUT);
   pinMode(motor.ENCB, INPUT); 
-  /*
-  m_enc.write(0);  
-  */
   return;
+}
+
+void move() {
+  motor_drive(M1, M1_command.speed, M1_command.direction);
+  motor_drive(M2, M2_command.speed, M2_command.direction);
+  motor_drive(M3, M3_command.speed, M3_command.direction);
+  motor_drive(M4, M4_command.speed, M4_command.direction);
 }
 
 /*
@@ -308,12 +305,12 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
   analogWrite(motor.EN, speed);
   switch(direction) {
     case CW: 
-      digitalWrite(motor.IN1, LOW);
-      digitalWrite(motor.IN2, HIGH);
-      break;
-    case CCW:
       digitalWrite(motor.IN1, HIGH);
       digitalWrite(motor.IN2, LOW);
+      break;
+    case CCW:
+      digitalWrite(motor.IN1, LOW);
+      digitalWrite(motor.IN2, HIGH);
       break;
     case BRAKE:
       digitalWrite(motor.IN1, LOW);
@@ -328,18 +325,7 @@ void motor_drive(motor_t motor, uint8_t speed, dir_t direction) {
   return;
 }
 
-void readEncoder1(){
-  current_pos1 += (PINK & (1<<1) ? 1 : -1);
-}
-
-void readEncoder2(){
-  current_pos2 += (PINK & (1<<3) ? 1 : -1);
-}
-
-void readEncoder3(){
-  current_pos3 += (PINK & (1<<5) ? 1 : -1);
-}
-
-void readEncoder4(){
-  current_pos4 += (PINK & (1<<7) ? 1 : -1);
-}
+void read_enc1(){ current_pos1 += (PINK & (1<<1) ? 1 : -1); }
+void read_enc2(){ current_pos2 += (PINK & (1<<3) ? 1 : -1); }
+void read_enc3(){ current_pos3 += (PINK & (1<<5) ? 1 : -1); }
+void read_enc4(){ current_pos4 += (PINK & (1<<7) ? 1 : -1); }
