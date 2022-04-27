@@ -12,10 +12,10 @@
   };
 
   struct pid_params_t {
-    uint16_t KP;
-    uint16_t KI;
-    uint16_t KD;
-    uint16_t BIAS;
+    int32_t KP;
+    int32_t KI;
+    int32_t KD;
+    int32_t BIAS;
     uint8_t UMIN;
     uint8_t UMAX;
   };
