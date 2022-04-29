@@ -1,4 +1,5 @@
 #include "theseus.h"
+//#include "Mecanum.h"
 #include <Servo.h>
 #include <Stepper.h>
 #include "ros.h"
@@ -9,6 +10,7 @@
 #include <tf/transform_broadcaster.h>
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt32.h>
+#include <std_msgs/Float32MultiArray.h>
 
 const uint32_t STEPS = 1000;
 uint32_t curr_step = 0;
@@ -16,9 +18,11 @@ uint32_t input_angle = 0;
 
 Stepper stepper(STEPS,A0,A1);
 
+std_msgs::Float32MultiArray enc_msg;
+
 ros::NodeHandle nh;
 geometry_msgs::TransformStamped t;
-tf::TransformBroadcaster broadcaster;
+ros::Publisher enc_pub("encoders", &enc_msg);
 
 
 /*
@@ -47,6 +51,10 @@ float desired_y;
 float desired_th;
 ////
 
+//odom parameters
+const int32_t odom_period = 50;
+//
+
 Servo lac_v;
 Servo lac_h;
 
@@ -58,6 +66,7 @@ const int32_t TICKS_PER_ROTATION = 16*50;
 
 volatile int32_t current_time = 0;
 volatile int32_t elapsed_time = 0; 
+volatile int32_t odom_timer = 0;
 
 //ignore
 int32_t current_ticks = 0;
@@ -67,6 +76,8 @@ volatile int32_t current_pos1 = 0;
 volatile int32_t current_pos2 = 0;
 volatile int32_t current_pos3 = 0;
 volatile int32_t current_pos4 = 0;
+
+int32_t last_encoder_counts[4];
 
 
                   //  KP KI KD BIAS UMIN UMAX
@@ -134,6 +145,9 @@ void setup() {
   nh.initNode();              // init ROS
   nh.subscribe(sub1);          // subscribe to cmd_vel
   nh.subscribe(sub2);
+  nh.advertise(enc_pub);      //advertise the encoder info
+  enc_msg.data = (float *)malloc(sizeof(float)*4);
+  enc_msg.data_length = 4;
   //Serial.println("Input a position");
 
   lac_v.write(30);
@@ -158,6 +172,24 @@ void loop() {
   current_time = millis();
   static int32_t previous_time = 0;
   elapsed_time = current_time - previous_time;
+
+
+  // send odom
+  if((current_time - odom_timer) > odom_period) {
+    // grab data from encoders
+    get_encoder_counts(enc_msg.data); // returned as x, y, theta
+    enc_msg.data[3] = (float)(current_time - odom_timer) / 1000;
+    
+    // publish data
+    enc_pub.publish(&enc_msg);
+    if((current_time - odom_period) > (odom_timer + odom_period)) {
+      odom_timer = current_time;
+    }
+    else {
+      odom_timer = odom_timer + odom_period;
+    }
+  }
+  //end odom
   
   static int32_t previous_ticks1 = 0;
   int32_t elapsed_ticks1 = current_pos1 - previous_ticks1;
@@ -369,3 +401,38 @@ void read_enc1(){ current_pos1 += (PINK & (1<<1) ? 1 : -1); }
 void read_enc2(){ current_pos2 += (PINK & (1<<3) ? 1 : -1); }
 void read_enc3(){ current_pos3 += (PINK & (1<<5) ? 1 : -1); }
 void read_enc4(){ current_pos4 += (PINK & (1<<7) ? 1 : -1); }
+
+void get_encoder_counts(float *xyt_counts){
+  int32_t newEncoderCounts[4];
+  newEncoderCounts[0] = current_pos1;
+  newEncoderCounts[1] = current_pos2; 
+  newEncoderCounts[2] = current_pos3; 
+  newEncoderCounts[3] = current_pos4;
+  
+  // find deltas
+  int deltaEncoderCounts[4];
+  for(int i = 0; i < 4; i++) {
+    // check for overflow
+    if(abs(last_encoder_counts[i]) > COUNT_OVERFLOW && abs(newEncoderCounts[i]) > COUNT_OVERFLOW && sign(last_encoder_counts[i]) != sign(newEncoderCounts[i])) {
+      if(sign(last_encoder_counts[i]) > 0)
+        deltaEncoderCounts[i] = newEncoderCounts[i] - last_encoder_counts[i] + INT_MAX;
+      else
+        deltaEncoderCounts[i] = newEncoderCounts[i] - last_encoder_counts[i] - INT_MAX;
+    }
+    else deltaEncoderCounts[i] = newEncoderCounts[i] - last_encoder_counts[i];
+
+    /*
+    // check for gross change -> MD25 board power cycled
+    if(abs(deltaEncoderCounts[i]) > COUNT_RESET) deltaEncoderCounts[i] = 0;
+    // no idea what the real value is in this case
+    */
+    
+    // save encoder counts
+    last_encoder_counts[i] = newEncoderCounts[i];
+  }
+  
+  // convert the motor counts into x, y, theta counts
+  xyt_counts[0] = (deltaEncoderCounts[0] + deltaEncoderCounts[1] + deltaEncoderCounts[2] + deltaEncoderCounts[3]) / 4;
+  xyt_counts[1] = (0 - deltaEncoderCounts[0] + deltaEncoderCounts[1] + deltaEncoderCounts[2] - deltaEncoderCounts[3]) / 4;
+  xyt_counts[2] = (0 - deltaEncoderCounts[0] + deltaEncoderCounts[1] - deltaEncoderCounts[2] + deltaEncoderCounts[3]) / 4;
+}
