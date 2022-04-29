@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
+def valvesAngleFinder(frame_gau_blur, hsv, frame, color, x_center, y_center, r):
     # creates the range of green
     if color == 'green':
         lower_hsv = np.array([30, 52, 50]) # [30, 52, 72]
@@ -13,13 +13,13 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
         upper_size = 8000
         lower_size = 1000
     else:
-        sensitivity = 30
+        sensitivity = 80
         lower_hsv = np.array([0, 0, 255-sensitivity])
         higher_hsv = np.array([255, sensitivity, 255])
-        upper = 12/7+0.2
-        lower = 12/7-0.2
+        upper = 5.6/3.8+0.2
+        lower = 5.6/3.8-0.2
         upper_size = 7000
-        lower_size = 1000
+        lower_size = 1500
 
     # finds blue regions and extract eblue region dges
     hsv_range = cv2.inRange(hsv, lower_hsv, higher_hsv)
@@ -32,21 +32,23 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
     x_rec = 0
     y_rec = 0
     angle = 0
-    pre_angle = 0
     for c in cnts:
         rect = cv2.minAreaRect(c)
         (x,y),(w,h), a = rect
-        if (lower < w/(h+0.0001) < upper or lower < h/(w+0.0001) < upper) and upper_size>w*h>lower_size: # filter out incorrect rectangle
+        delta = ((x-x_center)**2+(y-y_center)**2)**0.5
+        # print(delta)
+        if (lower < w/(h+0.0001) < upper or lower < h/(w+0.0001) < upper) and upper_size>w*h>lower_size and delta<500: # filter out incorrect rectangle
             box = cv2.boxPoints(rect)
             box = np.int0(box) #turn into ints
             x_rec = round(np.int0(x))
             y_rec = round(np.int0(y))
+            
             cv2.drawContours(frame, [box], 0, (0,0,255), 4)
             cv2.rectangle(frame, (x_rec-5, y_rec-5), (x_rec+5, y_rec+5), (0,128,255), -1) # draws circle center
             angle = round(a, 2)
-            if abs(angle-pre_angle) > 45 and angle == 270:
-                angle = pre_angle
-            pre_angle = angle
+            break
+        else:
+            angle = None
     
     #cv2.imshow('Circular Valve', frame)
     cv2.imshow('white elements', hsv_s_gray)
@@ -64,13 +66,10 @@ def valvesFinder(coef, pow, radius, frame, type):
     # image pre-processing
     frame_gau_blur = cv2.GaussianBlur(frame, (3, 3), 0)
     hsv = cv2.cvtColor(frame_gau_blur, cv2.COLOR_BGR2HSV)
-    x_angle, y_angle, angle = valvesAngleFinder(frame_gau_blur, hsv, frame, color)
-
+    
     # creates the range of blue
-    lower_blue = np.array([110,150,80])
-    higher_blue = np.array([130, 255, 255])
-    #lower_blue = np.array([110, 20, 90])
-    #higher_blue = np.array([130, 148, 190])
+    lower_blue = np.array([110,150,80]) # [110, 20, 90]
+    higher_blue = np.array([130, 255, 255]) # [130, 148, 190]
 
     # finds blue regions and extract eblue region dges
     blue_range = cv2.inRange(hsv, lower_blue, higher_blue)
@@ -79,6 +78,7 @@ def valvesFinder(coef, pow, radius, frame, type):
     #canny_edge = cv2.Canny(blue_s_gray, 95, 140)
 
     # applys HoughCircles
+    # _, blue_s_gray = cv2.threshold(blue_s_gray, 8, 255, cv2.THRESH_BINARY)
     circles = cv2.HoughCircles(blue_s_gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=2000, param1=10, param2=50, minRadius=80, maxRadius=250)
     if circles is not None:
         circles = np.round(circles[0, :]).astype("int")
@@ -88,40 +88,42 @@ def valvesFinder(coef, pow, radius, frame, type):
             x = round(x, 2)
             y = round(y, 2)
             print("Circle Center: ({}, {})".format(x, y))
+            x_angle, y_angle, angle = valvesAngleFinder(frame_gau_blur, hsv, frame, color, x, y, r)
             # print("Pointer Center: ({}, {})".format(x_angle, y_angle))
 
-            if x_angle > x:
-                if y_angle > y:
-                    angle = angle + 90.00
-            else:
-                if y_angle > y:
-                    angle = 180 + angle
+            if not angle == None:
+                if x_angle > x:
+                    if y_angle > y:
+                        angle = angle + 90.00
                 else:
-                    angle = 270 + angle
+                    if y_angle > y:
+                        angle = 180 + angle
+                    else:
+                        angle = 270 + angle
 
             print('Angle:', angle)
 
-        depthFinder(blue_range, np.pi*radius**2, np.pi*r**2, coef, pow)
+        #depthFinder(blue_range, np.pi*radius**2, np.pi*r**2, coef, pow)
         
     cv2.imshow('Circular Valve', frame)
-    #cv2.imshow('blue elements', blue_s_gray)
+    # cv2.imshow('blue elements', blue_s_gray)
 
 
-def leverRect(coef, pow, W, L, frame, type):
+def leverRect(W, L, frame, type):
     # creates the range of color
     if type == 'lever':
-        lower_color = np.array([100,150,80]) # 110,20,90
+        lower_color = np.array([100,150,90]) # 110,20,90
         higher_color = np.array([130, 255, 255])
-        lower_size = 3000
+        lower_size = 6000
         upper_size = 100000
     else:
-        lower_color = np.array([1, 50, 100])
+        lower_color = np.array([5, 80, 120])
         higher_color = np.array([20, 255, 255])
-        lower_size = 1300
+        lower_size = 4000
         if type == 'small switch':
-            upper_size = 8000
+            upper_size = 10000
         else:
-            upper_size = 100000
+            upper_size = 50000
 
     # image pre-processing
     frame_gau_blur = cv2.GaussianBlur(frame, (3, 3), 0)
@@ -135,8 +137,8 @@ def leverRect(coef, pow, W, L, frame, type):
     _, color_s_gray = cv2.threshold(color_s_gray, 8, 255, cv2.THRESH_BINARY)
     cnts = cv2.findContours(color_s_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2]  # Use index [-2] to be compatible to OpenCV 3 and 4
 
-    upper = L/W + 0.1
-    lower = L/W - 0.1
+    upper = L/W + 0.2
+    lower = L/W - 0.2
 
     for c in cnts:
         rect = cv2.minAreaRect(c)
@@ -165,8 +167,7 @@ def leverRect(coef, pow, W, L, frame, type):
 
 
 # calculates white pixel numbers and convert to depth info
-def depthFinder(white, area, pix_area, coef, pow):
-    #number_of_white_pix = np.sum(white == 255)
+def depthFinder(area, pix_area, coef, pow):
     ratio = pix_area/area
     distance = round(coef*ratio**(pow), 2)
     #print(ratio)
@@ -176,7 +177,7 @@ def depthFinder(white, area, pix_area, coef, pow):
 def main():
     target = 'large valve'
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
 
     while(True):
@@ -217,19 +218,19 @@ def main():
             pow = -0.548
             W = 1.6
             L = 5.6
-            leverRect(coef, pow, W, L, frame, target)
+            leverRect(W, L, frame, target)
         elif target == "small switch":
             coef = 1934.7
             pow = -0.548
-            W = 4
-            L = 8
-            leverRect(coef, pow, W, L, frame, target)
+            W = 7.8
+            L = 14
+            leverRect(W, L, frame, target)
         elif target == "large switch":
             coef = 1934.7
             pow = -0.548
-            W = 1
-            L = 3.9
-            leverRect(coef, pow, W, L, frame, target)
+            W = 10.0
+            L = 37.1
+            leverRect(W, L, frame, target)
         else:
             print("!!!Wrong Target!!!")
             break
