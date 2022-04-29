@@ -32,7 +32,6 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color, x_center, y_center, r):
     x_rec = 0
     y_rec = 0
     angle = 0
-    pre_angle = 0
     for c in cnts:
         rect = cv2.minAreaRect(c)
         (x,y),(w,h), a = rect
@@ -48,9 +47,6 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color, x_center, y_center, r):
             cv2.rectangle(frame, (x_rec-5, y_rec-5), (x_rec+5, y_rec+5), (0,128,255), -1) # draws circle center
             angle = round(a, 2)
             break
-            # if abs(angle-pre_angle) > 45 and angle == 270:
-            #     angle = pre_angle
-            # pre_angle = angle
         else:
             angle = None
     
@@ -71,12 +67,9 @@ def valvesFinder(coef, pow, radius, frame, type):
     frame_gau_blur = cv2.GaussianBlur(frame, (3, 3), 0)
     hsv = cv2.cvtColor(frame_gau_blur, cv2.COLOR_BGR2HSV)
     
-
     # creates the range of blue
-    lower_blue = np.array([110,150,80])
-    higher_blue = np.array([130, 255, 255])
-    #lower_blue = np.array([110, 20, 90])
-    #higher_blue = np.array([130, 148, 190])
+    lower_blue = np.array([110,150,80]) # [110, 20, 90]
+    higher_blue = np.array([130, 255, 255]) # [130, 148, 190]
 
     # finds blue regions and extract eblue region dges
     blue_range = cv2.inRange(hsv, lower_blue, higher_blue)
@@ -110,13 +103,13 @@ def valvesFinder(coef, pow, radius, frame, type):
 
             print('Angle:', angle)
 
-        depthFinder(blue_range, np.pi*radius**2, np.pi*r**2, coef, pow)
+        #depthFinder(blue_range, np.pi*radius**2, np.pi*r**2, coef, pow)
         
     cv2.imshow('Circular Valve', frame)
     # cv2.imshow('blue elements', blue_s_gray)
 
 
-def leverRect(coef, pow, W, L, frame, type):
+def leverRect(W, L, frame, type):
     # creates the range of color
     if type == 'lever':
         lower_color = np.array([100,150,90]) # 110,20,90
@@ -174,8 +167,7 @@ def leverRect(coef, pow, W, L, frame, type):
 
 
 # calculates white pixel numbers and convert to depth info
-def depthFinder(white, area, pix_area, coef, pow):
-    #number_of_white_pix = np.sum(white == 255)
+def depthFinder(area, pix_area, coef, pow):
     ratio = pix_area/area
     distance = round(coef*ratio**(pow), 2)
     #print(ratio)
@@ -226,19 +218,19 @@ def main():
             pow = -0.548
             W = 1.6
             L = 5.6
-            leverRect(coef, pow, W, L, frame, target)
+            leverRect(W, L, frame, target)
         elif target == "small switch":
             coef = 1934.7
             pow = -0.548
             W = 7.8
             L = 14
-            leverRect(coef, pow, W, L, frame, target)
+            leverRect(W, L, frame, target)
         elif target == "large switch":
             coef = 1934.7
             pow = -0.548
             W = 10.0
             L = 37.1
-            leverRect(coef, pow, W, L, frame, target)
+            leverRect(W, L, frame, target)
         else:
             print("!!!Wrong Target!!!")
             break
