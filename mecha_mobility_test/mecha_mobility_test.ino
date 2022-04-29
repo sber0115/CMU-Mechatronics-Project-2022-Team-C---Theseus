@@ -3,6 +3,7 @@
 #include <Stepper.h>
 #include "ros.h"
 #include "geometry_msgs/Twist.h"
+#include "geometry_msgs/Point.h"
 #include <ros/time.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
@@ -11,7 +12,7 @@
 
 const uint32_t STEPS = 1000;
 uint32_t curr_step = 0;
-uint32_t input_angle =180;
+uint32_t input_angle = 0;
 
 Stepper stepper(STEPS,A0,A1);
 
@@ -49,8 +50,8 @@ float desired_th;
 Servo lac_v;
 Servo lac_h;
 
-int pos_v = 0;
-int pos_h = 0;
+uint32_t pos_v = 30;
+uint32_t pos_h = 30;
 
 // motor constants
 const int32_t TICKS_PER_ROTATION = 16*50;
@@ -101,11 +102,13 @@ void velCallback(  const geometry_msgs::Twist& vel)
   velocity_transform(vel.linear.x, vel.linear.y, vel.angular.z);
 }
 
-ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel" , velCallback);  
-
-void stepperCallback(const std_msgs::UInt32 msg){
-  input_angle = msg.data;
+void armCallback(  const geometry_msgs::Point& arm)
+{
+  arm_transform(arm.x, arm.y, arm.z);
 }
+
+ros::Subscriber<geometry_msgs::Twist> sub1("cmd_vel" , velCallback);
+ros::Subscriber<geometry_msgs::Point> sub2("cmd_arm" , armCallback);
 
 void setup() {
   Serial.begin(115200);
@@ -119,6 +122,9 @@ void setup() {
   lac_h.attach(9);
 
   stepper.setSpeed(50);
+  pinMode(A0, OUTPUT);
+  pinMode(A1, OUTPUT);
+  pinMode(A2, OUTPUT);
 
   attachInterrupt(digitalPinToInterrupt(M1.ENCA), read_enc1, RISING);
   attachInterrupt(digitalPinToInterrupt(M2.ENCA), read_enc2, RISING);
@@ -126,8 +132,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(M4.ENCA), read_enc4, RISING);
   
   nh.initNode();              // init ROS
-  nh.subscribe(sub);          // subscribe to cmd_vel
-  
+  nh.subscribe(sub1);          // subscribe to cmd_vel
+  nh.subscribe(sub2);
   //Serial.println("Input a position");
 
   lac_v.write(30);
@@ -140,10 +146,12 @@ void loop() {
 
   // angle per step
   int32_t input_step = map(input_angle,0,360,0,200);
-
+  
   // move to the target angle
+  digitalWrite(A2, HIGH);
   stepper.step((input_step - curr_step)*4);
-
+  lac_v.write(pos_v); 
+  lac_h.write(pos_h);
   // save the new current angle
   curr_step = input_step;
 
@@ -228,6 +236,16 @@ void velocity_transform(float x, float y, float theta) {
   M2_sp = (int32_t) 9.55*(x + y - (L1 + L2)*theta)/R;
   M3_sp = (int32_t) 9.55*(x + y + (L1 + L2)*theta)/R;
   M4_sp = (int32_t) 9.55*(x - y + (L1 + L2)*theta)/R;
+}
+
+void arm_transform(float h, float s, float v) {
+  
+  input_angle = (uint32_t) s;
+  v *= 1000;
+  h *= 1000;
+  pos_v = map((uint32_t) v, 0, 80, 30, 100);
+  
+  pos_h = map((uint32_t) h, 0, 87, 30, 130);
 }
 
 
