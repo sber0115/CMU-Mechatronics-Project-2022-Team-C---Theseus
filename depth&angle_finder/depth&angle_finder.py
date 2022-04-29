@@ -13,13 +13,13 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color):
         upper_size = 8000
         lower_size = 1000
     else:
-        sensitivity = 30
+        sensitivity = 70
         lower_hsv = np.array([0, 0, 255-sensitivity])
         higher_hsv = np.array([255, sensitivity, 255])
-        upper = 12/7+0.2
-        lower = 12/7-0.2
+        upper = 8.5/7.3+0.2
+        lower = 8.5/7.3-0.2
         upper_size = 7000
-        lower_size = 1000
+        lower_size = 1500
 
     # finds blue regions and extract eblue region dges
     hsv_range = cv2.inRange(hsv, lower_hsv, higher_hsv)
@@ -110,18 +110,18 @@ def valvesFinder(coef, pow, radius, frame, type):
 def leverRect(coef, pow, W, L, frame, type):
     # creates the range of color
     if type == 'lever':
-        lower_color = np.array([100,150,80]) # 110,20,90
+        lower_color = np.array([100,150,90]) # 110,20,90
         higher_color = np.array([130, 255, 255])
-        lower_size = 3000
+        lower_size = 6000
         upper_size = 100000
     else:
-        lower_color = np.array([1, 50, 100])
+        lower_color = np.array([5, 80, 120])
         higher_color = np.array([20, 255, 255])
-        lower_size = 1300
+        lower_size = 4000
         if type == 'small switch':
-            upper_size = 8000
+            upper_size = 10000
         else:
-            upper_size = 100000
+            upper_size = 50000
 
     # image pre-processing
     frame_gau_blur = cv2.GaussianBlur(frame, (3, 3), 0)
@@ -135,8 +135,8 @@ def leverRect(coef, pow, W, L, frame, type):
     _, color_s_gray = cv2.threshold(color_s_gray, 8, 255, cv2.THRESH_BINARY)
     cnts = cv2.findContours(color_s_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2]  # Use index [-2] to be compatible to OpenCV 3 and 4
 
-    upper = L/W + 0.1
-    lower = L/W - 0.1
+    upper = L/W + 0.2
+    lower = L/W - 0.2
 
     for c in cnts:
         rect = cv2.minAreaRect(c)
@@ -174,9 +174,9 @@ def depthFinder(white, area, pix_area, coef, pow):
 
 
 def main():
-    target = 'large valve'
+    target = 'lever'
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
 
     while(True):
@@ -221,14 +221,14 @@ def main():
         elif target == "small switch":
             coef = 1934.7
             pow = -0.548
-            W = 4
-            L = 8
+            W = 7.8
+            L = 14
             leverRect(coef, pow, W, L, frame, target)
         elif target == "large switch":
             coef = 1934.7
             pow = -0.548
-            W = 1
-            L = 3.9
+            W = 10.0
+            L = 37.1
             leverRect(coef, pow, W, L, frame, target)
         else:
             print("!!!Wrong Target!!!")
