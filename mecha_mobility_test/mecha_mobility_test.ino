@@ -52,7 +52,7 @@ float desired_th;
 ////
 
 //odom parameters
-const int32_t odom_period = 50;
+const int32_t odom_period = 100;
 //
 
 Servo lac_v;
@@ -79,16 +79,22 @@ volatile int32_t current_pos4 = 0;
 
 int32_t last_encoder_counts[4];
 
-
                   //  KP KI KD BIAS UMIN UMAX
 const int32_t KP = 800; //800
 const int32_t KI = 20; //20
 const int32_t KD = 2500; //2500
-const int32_t BIAS = 100000L;
+const int32_t BIAS = 0L;
 
+/*
 pid_params_t M1_PID = {KP+1000,KI,KD-150,BIAS,0,255}; 
 pid_params_t M2_PID = {KP,KI,KD,BIAS,0,255};
 pid_params_t M3_PID = {KP,KI+8,KD,BIAS,0,255};
+pid_params_t M4_PID = {KP,KI,KD,BIAS,0,255};
+*/
+
+pid_params_t M1_PID = {KP,KI,KD,BIAS,0,255}; 
+pid_params_t M2_PID = {KP,KI,KD,BIAS,0,255};
+pid_params_t M3_PID = {KP,KI,KD,BIAS+10000,0,255};
 pid_params_t M4_PID = {KP,KI,KD,BIAS,0,255};
 
 directive_t M1_command;
@@ -103,10 +109,19 @@ volatile int32_t M4_velocity = 0;
 
 
 //To convert between radians/s and revs/m, multiply rads/s by 9.55
+
+/*
 volatile int32_t M1_sp = 0; // rev/min
 volatile int32_t M2_sp = 0;
 volatile int32_t M3_sp = 0;
 volatile int32_t M4_sp = 0;
+*/
+
+volatile int32_t M1_sp = 40; // rev/min
+volatile int32_t M2_sp = 40;
+volatile int32_t M3_sp = 40;
+volatile int32_t M4_sp = 40;
+
 
 void velCallback(  const geometry_msgs::Twist& vel)
 {
@@ -118,8 +133,8 @@ void armCallback(  const geometry_msgs::Point& arm)
   arm_transform(arm.x, arm.y, arm.z);
 }
 
-ros::Subscriber<geometry_msgs::Twist> sub1("cmd_vel" , velCallback);
-ros::Subscriber<geometry_msgs::Point> sub2("cmd_arm" , armCallback);
+//ros::Subscriber<geometry_msgs::Twist> sub1("cmd_vel" , velCallback);
+//ros::Subscriber<geometry_msgs::Point> sub2("cmd_arm" , armCallback);
 
 void setup() {
   Serial.begin(115200);
@@ -129,8 +144,8 @@ void setup() {
   motor_initialize(M3);
   motor_initialize(M4);  
 
-  lac_v.attach(8);
-  lac_h.attach(9);
+  //lac_v.attach(8);
+  //lac_h.attach(9);
 
   stepper.setSpeed(50);
   pinMode(A0, OUTPUT);
@@ -141,22 +156,21 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(M2.ENCA), read_enc2, RISING);
   attachInterrupt(digitalPinToInterrupt(M3.ENCA), read_enc3, RISING);
   attachInterrupt(digitalPinToInterrupt(M4.ENCA), read_enc4, RISING);
-  
+  /*  
   nh.initNode();              // init ROS
   nh.subscribe(sub1);          // subscribe to cmd_vel
   nh.subscribe(sub2);
   nh.advertise(enc_pub);      //advertise the encoder info
   enc_msg.data = (float *)malloc(sizeof(float)*4);
   enc_msg.data_length = 4;
+  */
+  
   //Serial.println("Input a position");
-
-  lac_v.write(30);
-  lac_h.write(30);
 
 }
 
 void loop() {
-  nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
+  //nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
 
   // angle per step
   int32_t input_step = map(input_angle,0,360,0,200);
@@ -218,7 +232,6 @@ void loop() {
 
   previous_time = current_time;
   
-
   //Serial.print("CMD:");
   //Serial.print(M1_command.speed);
   Serial.print("SP1:");
@@ -253,14 +266,6 @@ void loop() {
   Serial.println(String(M4_command.speed));*/
   delay(100);
   
-  /*
-  unsigned long CurrentTime = millis();
-  if (CurrentTime > 6000){
-    M1_sp = 80;
-    M2_sp = 80;
-    M3_sp = 80;
-    M4_sp = 80;
-  } */
 }
 
 void velocity_transform(float x, float y, float theta) {
@@ -404,10 +409,10 @@ void read_enc4(){ current_pos4 += (PINK & (1<<7) ? 1 : -1); }
 
 void get_encoder_counts(float *xyt_counts){
   int32_t newEncoderCounts[4];
-  newEncoderCounts[0] = current_pos1;
-  newEncoderCounts[1] = current_pos2; 
-  newEncoderCounts[2] = current_pos3; 
-  newEncoderCounts[3] = current_pos4;
+  newEncoderCounts[0] = current_pos1; //front-left (M1)
+  newEncoderCounts[1] = current_pos3; //front-right (M3)
+  newEncoderCounts[2] = current_pos2; //back-left (M2)
+  newEncoderCounts[3] = current_pos4; //back-right (M4)
   
   // find deltas
   int deltaEncoderCounts[4];
