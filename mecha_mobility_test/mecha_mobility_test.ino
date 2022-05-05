@@ -46,9 +46,9 @@ const float R = 0.0485;
 const float L1 = 0.127;
 const float L2 = 0.138;
 
-float desired_x;
-float desired_y;
-float desired_th;
+volatile float desired_x;
+volatile float desired_y;
+volatile float desired_th;
 ////
 
 //odom parameters
@@ -58,8 +58,8 @@ const int32_t odom_period = 100;
 Servo lac_v;
 Servo lac_h;
 
-uint32_t pos_v = 30;
-uint32_t pos_h = 30;
+volatile uint32_t pos_v = 30;
+volatile uint32_t pos_h = 30;
 
 // motor constants
 const int32_t TICKS_PER_ROTATION = 16*50;
@@ -80,22 +80,23 @@ volatile int32_t current_pos4 = 0;
 int32_t last_encoder_counts[4];
 
                   //  KP KI KD BIAS UMIN UMAX
-const int32_t KP = 800; //800
-const int32_t KI = 20; //20
-const int32_t KD = 2500; //2500
-const int32_t BIAS = 0L;
+const int32_t KP = 30000; //800
+const int32_t KI = 60; //20
+const int32_t KD = 10000; //2500
+const int32_t BIAS = 2500;
+
+
+pid_params_t M1_PID = {KP,KI,KD,BIAS,0,255}; 
+pid_params_t M2_PID = {KP,KI,KD,BIAS,0,255};
+pid_params_t M3_PID = {KP,KI,KD,BIAS,0,255};
+pid_params_t M4_PID = {KP,KI,KD,BIAS,0,255};
 
 /*
-pid_params_t M1_PID = {KP+1000,KI,KD-150,BIAS,0,255}; 
-pid_params_t M2_PID = {KP,KI,KD,BIAS,0,255};
-pid_params_t M3_PID = {KP,KI+8,KD,BIAS,0,255};
-pid_params_t M4_PID = {KP,KI,KD,BIAS,0,255};
-*/
-
 pid_params_t M1_PID = {KP,KI,KD,BIAS,0,255}; 
 pid_params_t M2_PID = {KP,KI,KD,BIAS,0,255};
 pid_params_t M3_PID = {KP,KI,KD,BIAS+10000,0,255};
 pid_params_t M4_PID = {KP,KI,KD,BIAS,0,255};
+*/
 
 directive_t M1_command;
 directive_t M2_command;
@@ -110,17 +111,11 @@ volatile int32_t M4_velocity = 0;
 
 //To convert between radians/s and revs/m, multiply rads/s by 9.55
 
-/*
+
 volatile int32_t M1_sp = 0; // rev/min
 volatile int32_t M2_sp = 0;
 volatile int32_t M3_sp = 0;
 volatile int32_t M4_sp = 0;
-*/
-
-volatile int32_t M1_sp = 40; // rev/min
-volatile int32_t M2_sp = 40;
-volatile int32_t M3_sp = 40;
-volatile int32_t M4_sp = 40;
 
 
 void velCallback(  const geometry_msgs::Twist& vel)
@@ -133,8 +128,8 @@ void armCallback(  const geometry_msgs::Point& arm)
   arm_transform(arm.x, arm.y, arm.z);
 }
 
-//ros::Subscriber<geometry_msgs::Twist> sub1("cmd_vel" , velCallback);
-//ros::Subscriber<geometry_msgs::Point> sub2("cmd_arm" , armCallback);
+ros::Subscriber<geometry_msgs::Twist> sub1("cmd_vel" , velCallback);
+ros::Subscriber<geometry_msgs::Point> sub2("cmd_arm" , armCallback);
 
 void setup() {
   Serial.begin(115200);
@@ -144,8 +139,8 @@ void setup() {
   motor_initialize(M3);
   motor_initialize(M4);  
 
-  //lac_v.attach(8);
-  //lac_h.attach(9);
+  lac_v.attach(8);
+  lac_h.attach(9);
 
   stepper.setSpeed(50);
   pinMode(A0, OUTPUT);
@@ -156,28 +151,29 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(M2.ENCA), read_enc2, RISING);
   attachInterrupt(digitalPinToInterrupt(M3.ENCA), read_enc3, RISING);
   attachInterrupt(digitalPinToInterrupt(M4.ENCA), read_enc4, RISING);
-  /*  
+ 
   nh.initNode();              // init ROS
   nh.subscribe(sub1);          // subscribe to cmd_vel
   nh.subscribe(sub2);
   nh.advertise(enc_pub);      //advertise the encoder info
   enc_msg.data = (float *)malloc(sizeof(float)*4);
   enc_msg.data_length = 4;
-  */
+  
   
   //Serial.println("Input a position");
 
 }
 
 void loop() {
-  //nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
-
+  nh.spinOnce();        // make sure we listen for ROS messages and activate the callback if there is one
+ 
   // angle per step
   int32_t input_step = map(input_angle,0,360,0,200);
   
   // move to the target angle
   digitalWrite(A2, HIGH);
   stepper.step((input_step - curr_step)*4);
+
   lac_v.write(pos_v); 
   lac_h.write(pos_h);
   // save the new current angle
@@ -278,14 +274,10 @@ void velocity_transform(float x, float y, float theta) {
 void arm_transform(float h, float s, float v) {
   
   input_angle = (uint32_t) s;
-  v *= 1000;
-  h *= 1000;
-  pos_v = map((uint32_t) v, 0, 80, 30, 100);
+  pos_v = (uint32_t) v; // 30, 120
   
-  pos_h = map((uint32_t) h, 0, 87, 30, 130);
+  pos_h = (uint32_t) h; // 30, 140
 }
-
-
 
 int32_t sum_error1 = 0;
 int32_t sum_error2 = 0;
@@ -409,10 +401,10 @@ void read_enc4(){ current_pos4 += (PINK & (1<<7) ? 1 : -1); }
 
 void get_encoder_counts(float *xyt_counts){
   int32_t newEncoderCounts[4];
-  newEncoderCounts[0] = current_pos1; //front-left (M1)
+  newEncoderCounts[0] = current_pos1; //front-left  (M1)
   newEncoderCounts[1] = current_pos3; //front-right (M3)
-  newEncoderCounts[2] = current_pos2; //back-left (M2)
-  newEncoderCounts[3] = current_pos4; //back-right (M4)
+  newEncoderCounts[2] = current_pos2; //back-left   (M2)
+  newEncoderCounts[3] = current_pos4; //back-right  (M4)
   
   // find deltas
   int deltaEncoderCounts[4];
