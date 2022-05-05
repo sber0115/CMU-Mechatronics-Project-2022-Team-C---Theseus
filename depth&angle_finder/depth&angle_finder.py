@@ -14,11 +14,11 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color, x_center, y_center, r):
         upper_size = 8000
         lower_size = 1000
     else:
-        sensitivity = 80
+        sensitivity = 60
         lower_hsv = np.array([0, 0, 255-sensitivity])
         higher_hsv = np.array([255, sensitivity, 255])
-        upper = 5.6/3.8+0.2
-        lower = 5.6/3.8-0.2
+        upper = 9/6+0.2
+        lower = 9/6-0.2
         upper_size = 7000
         lower_size = 1500
 
@@ -159,7 +159,7 @@ def leverRect(W, L, frame, type):
             cv2.drawContours(frame, [box], 0, (0,255,0),4)
             x = np.int0(x)
             y = np.int0(y)
-            cv2.rectangle(frame, (x-5, y-5), (x+5, y+5), (0,128,255), -1) # draws rectangle center
+            cv2.rectangle(fraqme, (x-5, y-5), (x+5, y+5), (0,128,255), -1) # draws rectangle center
             print('Orientation:', ori)
             print("Center: ({}, {})".format(x, y))
 
