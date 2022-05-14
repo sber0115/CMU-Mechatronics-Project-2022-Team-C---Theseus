@@ -51,7 +51,7 @@ def valvesAngleFinder(frame_gau_blur, hsv, frame, color, x_center, y_center, r):
             angle = None
     
     #cv2.imshow('Circular Valve', frame)
-    cv2.imshow('white elements', hsv_s_gray)
+    # cv2.imshow('white elements', hsv_s_gray)
 
     return x_rec, y_rec, angle
 
@@ -106,7 +106,7 @@ def valvesFinder(coef, pow, radius, frame, type):
         #depthFinder(blue_range, np.pi*radius**2, np.pi*r**2, coef, pow)
         
     cv2.imshow('Circular Valve', frame)
-    # cv2.imshow('blue elements', blue_s_gray)
+    cv2.imshow('blue elements', blue_s_gray)
 
 
 def leverRect(W, L, frame, type):
@@ -175,7 +175,7 @@ def depthFinder(area, pix_area, coef, pow):
 
 
 def main():
-    target = 'large valve'
+    target = 'small valve'
 
     cap = cv2.VideoCapture(0)
     if not cap: print("!!!Failed VideoCapture: invalid camera source!!!")
